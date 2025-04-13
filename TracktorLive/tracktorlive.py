@@ -3,39 +3,61 @@
 # Tested on Python 3.12.6 [2024/11/22]
 
 # In[1]:
+import argparse
+import importlib
+import math
+import os
+from os.path import join as joinpath
+import re
+import subprocess
+import sys
+import time
+import warnings
+
+#from cv2 import cv2#uncomment for linting
+import cv2#comment for linting
 import numpy as np
 import pandas as pd
-import tracktor as tr
-from cv2 import cv2
-import sys
 import scipy.signal
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
-import time
-import argparse
-import os
-import subprocess
-#get parameters from the params.py file
-import params
-import importlib
-import math
-import re
 
+import params
+import tracktor as tr
 # In[2]:
 # ## Global parameters
 # This cell (below) enlists user-defined parameters
 
-parser = argparse.ArgumentParser(description='Introduce parameters.')
-parser.add_argument('-n', '--name', required=True, help='Name of new video file after analysis')
-parser.add_argument('-c', '--camera', required=False, help='Camera device number')
-parser.add_argument('-f', '--file', required=False, help='Complete file path')
-parser.add_argument('-d', '--direction', required=False, help='Introduce desired minimal distance in px to move to store direction/angle of individual in real time')
-parser.add_argument('-t', '--track', required = False, help='if True, tracktor-live will launch the tracking script to trigger specific actions when objects are in a particular area. If argument is missing, or False, the tracking script will not be used.')
+parser = argparse.ArgumentParser()
+parser.add_argument('-n', '--name',
+                required=True, help='name of new video file after analysis')
+parser.add_argument('-c', '--camera',
+                required=False, help='camera device number')
+parser.add_argument('-f', '--file',
+                required=False, help='complete file path')
+parser.add_argument('-d', '--direction',
+                required=False, help='introduce desired minimal distance in px\
+                to move to store direction/angle of individual in real time')
+parser.add_argument('-t', '--track',
+                required = False, help='whether tracktor-live should launch the\
+                tracking script to trigger specific actions when objects are\
+                in a particular area. If False or missing,\
+                tracking script will not be used.')
 
 #Video arguments
-parser.add_argument('-res', '--resolution', required=False, default="1920x1080", help='Default value is 1920x1080. If different, please introduce video/camera resolution in format "width x height" (e.g. "1920x1200") to convert pixels to cm for final plots. Otherwise pixels will be used for plots.')
-parser.add_argument('-x', '--xdistance', required=False, help='Introduce the real distance covered by the video/camera in the X axis to convert distance to cm. Otherwise, the final plots will use 1px = 0.026 cm.')
-parser.add_argument('-fps', '--fps', required=False, default=30, help='Default value is 30. If different, please introduce FPS value (frames per second) for accuracy when doing final plots (not required for real-time tracking).')
+parser.add_argument('-res', '--resolution',
+                required=False, default="1920x1080",
+                help='(default 1920x1080) video/camera resolution (widthxheight).\
+                If not given, pixels will be used instead of\
+                cm for plots.')
+parser.add_argument('-x', '--xdistance',
+                required=False, help='real x distance covered by the \
+                video/camera in the X axis to convert distance to cm. \
+                if not given, the final plots will use 1px = 0.026 cm.')#PRANAV: why 0.026 cm??
+parser.add_argument('-fps', '--fps',
+                required=False, default=30, help='(default 30). \
+                frames per second for accuracy \
+                (not required for real-time tracking).')
     
 args = parser.parse_args()
 
@@ -47,7 +69,10 @@ args = parser.parse_args()
 # Resolution parameters
 ########################
 
-print('It is recommended to introduce additional parameters (resolution and covered distance in X axis) to improve precision of the final plots. See --help for details.')
+if not args.fps and not args.xdistance and not args.resolution:
+    warnings.warn('It is recommended to introduce additional parameters (resolution and\
+    covered distance in X axis) to improve precision of the final plots. See --help\
+    for details. Assuming default values for now.')
 
 #get resolution Width and Height, fps and distance covered in X axis
 if args.resolution:
@@ -58,30 +83,27 @@ fps=int(args.fps)
 if args.xdistance:
     xdist=int(args.xdistance)
 else:
-    xdist=args.xdistance
+    xdist=args.xdistance#PRANAV: this won't work, maybe set a default value in the parser instead
 
+
+if args.file and args.camera:
+    raise SyntaxError("both camera and file were given, unsure how to proceed.")
+if not args.file and not args.camera:
+    parser.print_help()
+    raise SyntaxError("At least one argument, file or camera, is required.")
 ##############
 # video file
 ##############
 if args.file:
-    print(f"File path: {args.file}")
-    # Path to the video file
     video_path = args.file
-    # Open the video file
     video_capture = cv2.VideoCapture(video_path)
-    # Check if video opened successfully
-    if not video_capture.isOpened():
-        print("Error: Could not open video.")
-        exit()
-    # Read the first frame
-    ret, frame = video_capture.read()
-    # Check if frame was read successfully
-    if ret:
-        # Save the frame as an image
-        cv2.imwrite('first_frame.jpg', frame)
-        print("First frame extracted and saved as 'first_frame.jpg'")
-    else:
-        print("Error: Could not read frame.")
+
+    assert video_capture.isOpened(), "could not open video."
+
+    ret, frame = video_capture.read() #read first frame
+    assert ret, "could not read frame."
+    cv2.imwrite('first_frame.jpg', frame)
+    print("First frame extracted and saved as 'first_frame.jpg'")
     # Release the video capture object
     video_capture.release()
 
@@ -90,18 +112,18 @@ if args.file:
 ##############
 if args.camera:
     this=0
-    print(f"Camera ID: {args.camera}")
+#    print(f"Camera ID: {args.camera}")
     cap = cv2.VideoCapture(int(args.camera))
-    if not cap.isOpened():
-        print("Cannot open camera. You can try using v4l2-ctl --list-devices or ls /dev/video* to see available devices")
-        exit()
+    assert cap.isOpened(), "cannot open camera. You can try using v4l2-ctl\
+                                --list-devices or ls /dev/video* to see\
+                                available devices"
     # Read the first frame
     while True:
         ret, frame = cap.read()
         cv2.imshow('live feed',frame)
         this+=1
         # Check if frame was read successfully
-        if ret==True and this==100:
+        if ret and this==100:
             # Save the frame as an image
             cv2.imwrite('first_frame.jpg', frame)
             print("First frame extracted and saved as 'first_frame.jpg'")
@@ -112,20 +134,12 @@ if args.camera:
     cap.release()
     cv2.destroyAllWindows()
 
-#####################
-# No arguments given
-#####################
-if not args.file and not args.camera:
-    print("At least one parameter is required.")
-    parser.print_help()
-    exit()
-
 ###########################
 # Tune parameters window
 ###########################
 
 #load image
-image_path = os.getcwd() + '/first_frame.jpg'
+image_path = joinpath(os.getcwd(), 'first_frame.jpg')
 image = cv2.imread(image_path)
 
 # Define initial parameters
@@ -138,33 +152,33 @@ max_blob_size=np.copy(initial_max_blob_size)
 
 # Function to process the image based on current parameters
 def process_image(block_size, offset):
-    # Convert to grayscale
-    current_image = image.copy()
-    gray = cv2.cvtColor(current_image, cv2.COLOR_BGR2GRAY)
-    # Ensure block_size is odd and greater than 1
-    block_size = max(3, block_size)  # Ensure minimum value of 3 (an odd number)
-    if block_size % 2 == 0:
-        block_size += 1  # Ensure block_size is odd
-    # Apply adaptive thresholding
-    thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, block_size, offset)
-    thresh = cv2.bitwise_not(thresh)
-    # Contours
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    # Draw contours and calculate area (number of pixels) per blob
-    for contour in contours:
-        area = cv2.contourArea(contour)
-        if min_blob_size < area < max_blob_size:
-            cv2.drawContours(current_image, [contour], -1, (0, 255, 0), 2)
-            # Calculate centroid (center) of the contour
-            M = cv2.moments(contour)
-            if M["m00"] != 0:
-                cx = int(M["m10"] / M["m00"])
-                cy = int(M["m01"] / M["m00"])
-                # Display area at the centroid
-                cv2.putText(current_image, f'{area}', (cx - 20, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-     # Display the thresholded image
-    # ~ cv2.imshow('Thresholded Image', thresh) #can choose to
-    cv2.imshow('Threshold Image', current_image)
+#    # Convert to grayscale
+#    current_image = image.copy()
+#    gray = cv2.cvtColor(current_image, cv2.COLOR_BGR2GRAY)
+#    # Ensure block_size is odd and greater than 1
+#    block_size = max(3, block_size)  # Ensure minimum value of 3 (an odd number)
+#    if block_size % 2 == 0:
+#        block_size += 1  # Ensure block_size is odd
+#    # Apply adaptive thresholding
+#    thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, block_size, offset)
+#    thresh = cv2.bitwise_not(thresh)
+#    # Contours
+#    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+#    # Draw contours and calculate area (number of pixels) per blob
+#    for contour in contours:
+#        area = cv2.contourArea(contour)
+#        if min_blob_size < area < max_blob_size:
+#            cv2.drawContours(current_image, [contour], -1, (0, 255, 0), 2)
+#            # Calculate centroid (center) of the contour
+#            M = cv2.moments(contour)
+#            if M["m00"] != 0:
+#                cx = int(M["m10"] / M["m00"])
+#                cy = int(M["m01"] / M["m00"])
+#                # Display area at the centroid
+#                cv2.putText(current_image, f'{area}', (cx - 20, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+#     # Display the thresholded image
+#    # ~ cv2.imshow('Thresholded Image', thresh) #can choose to
+#    cv2.imshow('Threshold Image', current_image)
 
 # Initialize trackbars window and callback function
 cv2.namedWindow('Threshold Parameters')
