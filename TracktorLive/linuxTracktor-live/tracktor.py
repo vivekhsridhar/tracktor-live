@@ -1,6 +1,6 @@
 import numpy as np
-import pandas as pd
-import cv2
+from cv2 import cv2#FIXME
+#import cv2
 from sklearn.cluster import KMeans
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
@@ -208,13 +208,13 @@ def reorder_and_draw(final, colours, n_inds, col_ind, meas_now, df, mot, fr_no):
     """
     # Reorder contours based on results of the hungarian algorithm
     equal = np.array_equal(col_ind, list(range(len(col_ind))))
-    if equal == False:
+    if not equal:
         current_ids = col_ind.copy()
         reordered = [i[0] for i in sorted(enumerate(current_ids), key=lambda x:x[1])]
         meas_now = [x for (y,x) in sorted(zip(reordered,meas_now))]
 
     # Draw centroids
-    if mot == False:
+    if not mot:
         for i in range(len(meas_now)):
             if colours[i%4] == (0,0,255):
                 cv2.circle(final, tuple([int(x) for x in meas_now[i]]), 5, colours[i%4], -1, cv2.LINE_AA)

@@ -6,7 +6,7 @@
 import numpy as np
 import pandas as pd
 import tracktor as tr
-import cv2
+from cv2 import cv2
 import sys
 import scipy.signal
 from scipy.optimize import linear_sum_assignment
