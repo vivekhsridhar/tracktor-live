@@ -4,34 +4,65 @@
 # In[1]:
 import numpy as np
 import pandas as pd
+import os
+import sys
 import tracktor as tr
 import cv2
-import sys
 import scipy.signal
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 import time
 import argparse
-import os
 #get parameters from the params.py file
 import params
 import importlib
+import math
+import subprocess
+import re
 
 # ## Global parameters
 # This cell (below) enlists user-defined parameters
 
 # In[2]:
-
 parser = argparse.ArgumentParser(description='Introduce parameters.')
 parser.add_argument('-n', '--name', required=True, help='Name of new video file after analysis')
 parser.add_argument('-c', '--camera', required=False, help='Camera device number')
 parser.add_argument('-f', '--file', required=False, help='Complete file path')
-    
+parser.add_argument('-d', '--direction', required=False,
+                    help='Introduce desired minimal distance in px to move to store direction/angle of individual in real time')
+parser.add_argument('-t', '--track', required=False,
+                    help='if True, tracktor-live will launch the tracking script to trigger specific actions when objects are in a particular area. If argument is missing, or False, the tracking script will not be used.')
+
+# Video arguments
+parser.add_argument('-res', '--resolution', required=False, default="1920x1080",
+                    help='Default value is 1920x1080. If different, please introduce video/camera resolution in format "width x height" (e.g. "1920x1200") to convert pixels to cm for final plots. Otherwise pixels will be used for plots.')
+parser.add_argument('-x', '--xdistance', required=False,
+                    help='Introduce the real distance covered by the video/camera in the X axis to convert distance to cm. Otherwise, the final plots will use 1px = 0.026 cm.')
+parser.add_argument('-fps', '--fps', required=False, default=30,
+                    help='Default value is 30. If different, please introduce FPS value (frames per second) for accuracy when doing final plots (not required for real-time tracking).')
+
 args = parser.parse_args()
 
 ########################################################################
 #            Tune parameters
 ########################################################################
+
+#########################
+# Resolution parameters
+########################
+
+print('It is recommended to introduce additional parameters (resolution and covered distance in X axis) to improve precision of the final plots. See --help for details.')
+
+#get resolution Width and Height, fps and distance covered in X axis
+if args.resolution:
+    xmax=int(re.search(r'\d+', args.resolution).group())
+    ymax=int(re.search(r'\d+$', args.resolution).group())
+
+fps=int(args.fps)
+if args.xdistance:
+    xdist=int(args.xdistance)
+else:
+    xdist=args.xdistance
 
 ##############
 # video file
@@ -204,6 +235,8 @@ if block_size!=initial_block_size or offset!=initial_offset or max_blob_size!=in
 # number of elements in colours should be greater than n_inds (THIS IS NECESSARY FOR VISUALISATION ONLY)
 n_inds = params.n_inds
 colours = params.colours
+mot = params.mot
+k_means = params.k_means
 
 # this is the block_size and offset used for adaptive thresholding (block_size should always be odd)
 # these values are critical for tracking performance
@@ -217,10 +250,6 @@ scaling = params.scaling
 # this parameter is used to get rid of other objects in view that might be hard to threshold out but are differently sized
 min_area = params.min_area
 max_area = params.max_area
-
-# mot determines whether the tracker is being used in noisy conditions to track a single object or for multi-object
-# using this will enable k-means clustering to force n_inds number of animals
-mot = False
 
 # name of source video and paths
 video = args.name
@@ -253,6 +282,7 @@ if args.file:
 ##############
 if args.camera:
     print(f"Camera ID: {args.camera}")
+    # ~ cap = cv2.VideoCapture(int(args.camera))
     cap = cv2.VideoCapture(int(args.camera))
     if cap.isOpened() == False:
         sys.exit("Cannot open camera. You can try using v4l2-ctl --list-devices or ls /dev/video* to see available devices")
@@ -274,8 +304,25 @@ meas_now = list(np.zeros((n_inds,2)))
 
 last = 0
 df = []
-temp = pd.DataFrame(columns=['frame', 'pos_x', 'pos_y'])
+#----------------------------------------------------------------------#
+#       Check if direction is needed or not
+#----------------------------------------------------------------------#
+#Direction = minimal distance (in px) for the animal or object to move in order to compute direction. In other words, if the animal doesn't move more than this distance, we take the previous direction.
+#This is to avoid computing direction when the animal is still, which can lead to errors. This is only used if the argument is given, otherwise Tracktor will not compute direction.
+if args.direction:
+    direction = args.direction
+    angle = 0 #angle, we start with zero as default
+    prev=list(np.zeros((n_inds,2))) #previous position to compute atan2
+    temp = pd.DataFrame(columns=['time', 'pos_x', 'pos_y', 'direction', 'id']) # add direction
+else:
+    temp = pd.DataFrame(columns=['time', 'pos_x', 'pos_y','id']) # without direction
+#----------------------------------------------------------------------#
+
 temp.to_csv(output_filepath, sep=',')
+
+if args.track:
+    script_path="tracking.ps1"
+    process=subprocess.Popen(["powershell", "-ExecutionPolicy", "Bypass", "-File", script_path], shell=True)
 
 t0=time.time() #take start time
 while(True):
@@ -295,31 +342,70 @@ while(True):
                 break
             continue
         else:
+            # Apply k_means algorithm if k_means = True
+            if k_means:
+                if len(meas_now) != n_inds:
+                    contours, meas_now = tr.apply_k_means(contours, n_inds, meas_now)
             row_ind, col_ind = tr.hungarian_algorithm(meas_last, meas_now)
             final, meas_now, df = tr.reorder_and_draw(final, colours, n_inds, col_ind, meas_now, df, mot, this)
             # Create output dataframe
             for i in range(n_inds):
-                # ~ df.append([this, meas_now[i][0], meas_now[i][1]]) #########
-                df.append([time.time()-t0, meas_now[i][0], meas_now[i][1]])
-            ## Write positions to file dynamically
+                if args.direction:
+                    Xt=meas_now[i][0]-prev[i][0]
+                    Yt=meas_now[i][1]-prev[i][1]
+                    # if the distance moved is higher than X pixels we update direction and previous position
+                    if np.sqrt(Xt**2 + Yt**2) > int(direction):
+                        angle=math.degrees(math.atan2(Yt,Xt)) %360
+                        prev[i]=meas_now[i][0:2]
+                    # data we save depends on live tracking or video (time vs frame)
+                    if args.camera:
+                        df.append([time.time()-t0, meas_now[i][0], meas_now[i][1], angle, i])
+                    elif args.file:
+                        df.append([this, meas_now[i][0], meas_now[i][1], angle, i])
+                else:
+                    if args.camera:
+                        df.append([time.time()-t0, meas_now[i][0], meas_now[i][1],i])
+                    elif args.file:
+                        df.append([this, meas_now[i][0], meas_now[i][1],i])
+            # Write positions to file dynamically
             temp=pd.DataFrame(df[-1:])
-            temp.to_csv(output_filepath, mode='a',header=False)
+            temp.to_csv(output_filepath, mode='a',header=False,index=False)
             # Display the resulting frame
             out.write(final)
             cv2.imshow('Video', final)
-            # ~ if cv2.waitKey(1) == 27 or meas_now[0][0] < 20 or meas_now[0][0] > cap.get(3) - 20 or meas_now[0][1] < 20 or meas_now[0][1] > cap.get(4) - 20:
+            # ~ if cv2.waitKey(1) == 27 or meas_now[0][0] < 20 or meas_now[0][0] > cap.get(3) - 20 or meas_now[0][1] < 20 or meas_now[0][1] > cap.get(4) - 20: # add this line when object detection is required in ALL frames
             key=cv2.waitKey(1) & 0xFF
             if key == ord('q') or key == 27:
                 break
     if args.file:
         if last >= this:
             break
-        last = this ############
+        last = this
 
-## Write positions to file - if we need index, otherwise skip
-df = pd.DataFrame(np.matrix(df), columns = ['frame','pos_x','pos_y'])
-df.to_csv(output_filepath, sep=',')
 
+#terminate powershell script. If this interferes with other processes running in the computer, comment it and kill the process manually after plots:
+#Push Ctrl + C (inside the cmd prompt)
+if args.track:
+    print("Terminating tracking process...")
+    os.system('taskkill /IM powershell.exe /F')
+
+## Write positions to file & add index
+if args.direction:
+    df = pd.DataFrame(np.matrix(df), columns = ['time','pos_x','pos_y', 'direction', 'id'])
+else:
+    df = pd.DataFrame(np.matrix(df), columns = ['time','pos_x','pos_y', 'id'])
+
+#For video, change column name
+if args.file:
+    df.rename(columns={'time':'frame'}, inplace = True)
+    print(df)
+    df.to_csv(output_filepath, sep=',', index = False)
+
+#For live tracking, add frame column (this is an approximation as we do not control the FPS rate here)
+
+if args.camera:
+    df.insert(0,'frame', np.repeat(np.arange(1, (len(df)+1)/n_inds),n_inds))
+    df.to_csv(output_filepath, sep=',', index = False)
 
 ## When everything done, release the capture
 cap.release()
@@ -327,7 +413,8 @@ out.release()
 cv2.destroyAllWindows()
 cv2.waitKey(1)
 
-df = pd.read_csv(output_filepath)
+# In need to plot graphs again but without running the tracker, use the following command:
+#df = pd.read_csv(output_filepath)
 
 ########################################################################
 ########################################################################
@@ -347,146 +434,200 @@ if os.path.isdir('./imgs/{0}'.format(args.name)):
 else:
     os.mkdir('./imgs/{0}'.format(args.name))
     
-os.system("mv ./processing_file.csv ./imgs/{0}/{0}.csv".format(args.name))
-os.system("mv ./processing_file.mp4 ./imgs/{0}/{0}.mp4".format(args.name))
+os.system("move ./processing_file.csv ./imgs/{0}/{0}.csv".format(args.name))
+os.system("move ./processing_file.mp4 ./imgs/{0}/{0}.mp4".format(args.name))
 
-# ## Summary statistics
-# The cells below provide functions to perform basic summary statistics - in this case, distance moved between successive frames, cumulative distance within a time-window, velocity and acceleration.
+##########################################################################
+#                       Summary statistics
+##########################################################################
+
+# The cells below provide functions to perform basic summary statistics.
+# In this case, distance moved between successive frames, cumulative distance, velocity and acceleration.
+
 # In[5]:
 
-plt.figure(figsize=(5,5))
-plt.scatter(df['pos_x'], df['pos_y'], c=df['frame'], alpha=0.5)
-plt.xlabel('X', fontsize=16)
-plt.ylabel('Y', fontsize=16)
-plt.tight_layout()
-plt.savefig('imgs/' + args.name + '/ex1_fig1a.eps', format='eps', dpi=300)
-plt.show()
+# The smoothing window parameter determines the extent of smoothing (this parameter must be odd)
+smoothing_window = 5
 
+
+#1. Inverse Y axis
+if ymax >= max(df["pos_y"]):
+    df["pos_y"] = ymax - df["pos_y"]
+else:
+    df["pos_y"] = max(df["pos_y"]) - df["pos_y"]
+
+# 2. Compute velocity and acceleration
+dx = df['pos_x'] - df['pos_x'].shift(n_inds)
+dy = df['pos_y'] - df['pos_y'].shift(n_inds)
+d2x = dx - dx.shift(n_inds)
+d2y = dy - dy.shift(n_inds)
+df['speed'] = np.sqrt(dx**2 + dy**2)
+df['smoothed_speed'] = scipy.signal.savgol_filter(df['speed'], smoothing_window, 1)
+df['accn'] = np.sqrt(d2x**2 + d2y**2)
+df['smoothed_accn'] = scipy.signal.savgol_filter(df['accn'], smoothing_window, 1)
+df.head()
+
+# FIGURE 1 A
+# Tracked path
+if n_inds==1:
+    plt.figure(figsize=(5,5))
+    plt.scatter(df['pos_x'], df['pos_y'], c=df['frame'], alpha=0.5)
+    plt.xlabel('X', fontsize=16)
+    plt.ylabel('Y', fontsize=16)
+    plt.tight_layout()
+    plt.savefig('imgs/' + args.name + '/fig1a.eps', format='eps', dpi=300)
+    plt.show()
+else: #for more than 1 individual
+    plt.figure(figsize=(5,5))
+    plt.scatter(df['pos_x'], df['pos_y'], c=df['id'], cmap= 'jet', alpha=0.5)
+    plt.xlabel('X', fontsize=16)
+    plt.ylabel('Y', fontsize=16)
+    plt.tight_layout()
+    plt.savefig('imgs/' + args.name + '/fig1a.eps', format='eps', dpi=300)
+    plt.show()
+
+# FIGURE 1 B
+# Density plot
 plt.figure(figsize=(5,5))
 plt.hist2d(df['pos_x'], df['pos_y'], bins=20)
 plt.xlabel('X', fontsize=16)
 plt.ylabel('Y', fontsize=16)
 plt.tight_layout()
-plt.savefig('./imgs/' + args.name + '/ex1_fig1b.eps', format='eps', dpi=300)
+plt.savefig('./imgs/' + args.name + '/fig1b.eps', format='eps', dpi=300)
 plt.show()
 
 
 # In[6]:
-
-
 ## Parameters like speed and acceleration can be very noisy. Small noise in positional data is amplified as we take the
 ## derivative to get speed and acceleration. We therefore smooth this data to obtain reliable values and eliminate noise.
 
-# the smoothing window parameter determines the extent of smoothing (this parameter must be odd)
-smoothing_window = 11
+#----------------------------------------------------------------------#
+#           Conversion to cm and seconds
+#----------------------------------------------------------------------#
 
-## Fill in the parameters below if you'd like movement measures to be converted from pixels and frames to 
-## real-world measures (cms and secs)
-
-# Frame-rate (fps or frames per second) of recorded video to calculate time
-# ~ fps = 1000
+# Movement measures are converted from pixels and frames to real-world measures (cms and secs)
 
 # Pixels per cm to in the recorded video to calculate distances
-pxpercm = 78 * scaling
+# if resolution and distance in cm was given, it will be used here, otherwise we use standard conversion of px to cm,
+# which may not be accurate.
+
+if xdist:
+    pxpercm = (xmax/xdist) * scaling
+else:
+    # ~ pxpercm = 1/0.026 * scaling
+    pxpercm = 1 #keep
 
 
-# In[7]:
-
-
-dx = df['pos_x'] - df['pos_x'].shift(n_inds)
-dy = df['pos_y'] - df['pos_y'].shift(n_inds)
-d2x = dx - dx.shift(1)
-d2y = dy - dy.shift(1)
-df['speed'] = np.sqrt(dx**2 + dy**2)
-df['smoothed_speed'] = scipy.signal.savgol_filter(df['speed'], smoothing_window, 1)
-df['accn'] = np.sqrt(d2x**2 + d2y**2)
-df['smoothed_accn'] = scipy.signal.savgol_filter(df['accn'], smoothing_window, 1)
-df['cum_dist'] = df['smoothed_speed'].cumsum()
-df.head()
-
-
-# In[8]:
-
-
-def cumul_dist(start_fr, end_fr):
-    if start_fr != 1:
-        cumul_dist = df['cum_dist'][df['frame'] == end_fr].values[0] - df['cum_dist'][df['frame'] == start_fr].values[0]
-    else:
-        cumul_dist = df['cum_dist'][df['frame'] == end_fr].values[0]
-    return cumul_dist
-
-
-# In[9]:
-
-
-# ~ cumul_dist(150,200)
-
-
-# In[10]:
-
-
-df['time'] = df['frame']
-df['speed'] = df['speed']/ pxpercm
-df['smoothed_speed'] = df['smoothed_speed']/ pxpercm
-df['accn'] = df['accn']/ pxpercm
-df['smoothed_accn'] = df['smoothed_accn']/ pxpercm
-df['cum_dist'] = df['cum_dist'] / pxpercm
-df.head()
-
-
-# In[11]:
-
-
-# ~ cumul_dist(140,170) / pxpercm
-
-
-# In[12]:
-
+#Convert px to cm
+if args.file:
+    df['time'] = df['frame'] * fps
+    df['speed'] = df['speed'] * fps / pxpercm
+    df['smoothed_speed'] = df['smoothed_speed'] * fps / pxpercm
+    df['accn'] = df['accn'] *fps * fps / pxpercm
+    df['smoothed_accn'] = df['smoothed_accn'] * fps * fps / pxpercm
+    # ~ df['cum_dist'] = df['cum_dist'] / pxpercm -- this is done later
+    df.head()
+elif args.camera:
+    dt = df['time'] - df['time'].shift(n_inds)
+    df['speed'] = (df['speed'] / dt) * (1 / pxpercm)
+    df['smoothed_speed'] = (df['smoothed_speed'] / dt) * (1 / pxpercm)
+    df['accn'] = (df['accn'] /(dt*dt)) * (1 / pxpercm)
+    df['smoothed_accn'] = (df['smoothed_accn'] / (dt*dt)) * (1 / pxpercm)
+    # ~ df['cum_dist'] = df['cum_dist'] / pxpercm -- this is done later
+    df.head()
 
 np.nanmax(df['smoothed_speed']), np.nanmax(df['smoothed_accn'])
 
-
-# In[13]:
-
+# In[7]:
 
 ## We now remove any outliers that remain post smoothing
-## Here we want to conservative and not eliminate any relavant points as outliers. We therefore choose a high 'm' value
+## Here we want to be conservative and not eliminate any relavant points as outliers. We therefore choose a high 'm' value
 ## in the reject_outliers functions. The best approach is to visually compare smoothed data with the original data
-index = tr.reject_outliers(df['smoothed_speed'], m = 6)
-index = np.array(index[0])
 
+# FIGURE 2 A
+unique_ids = df['id'].unique()
 
-# In[16]:
+plt.figure(figsize=(10, 6))  # Adjust figure size as needed.
 
+for individual_id in unique_ids:
+    indiv_data = df.loc[df['id'] == individual_id, ['speed', 'time']].reset_index()
+    index = tr.reject_outliers(indiv_data['speed'], m = 6)
+    index = np.array(index[0])
+    indiv_data=indiv_data.loc[index,]
+    indiv_data['cum_dist'] = indiv_data['speed'].cumsum() #no need conversion, because smooth speed is already in cm
+    plt.scatter(indiv_data['time'], indiv_data['cum_dist'], s=8, alpha=0.5, label=f'ID {individual_id}')
 
-plt.scatter(df['time'][index], df['cum_dist'][index], c='#FF7F50', s=8, alpha=0.5)
 plt.xlabel('Time (s)')
-plt.ylabel('Cumulative distance (cm)')
+if xdist:
+    plt.ylabel('Cumulative distance (cm)')
+else:
+    plt.ylabel('Cumulative distance (px)')
+plt.legend(title='Individuals', loc='upper right')
 plt.tight_layout()
-plt.savefig('./imgs/' + args.name + '/ex1_fig2a.eps', format='eps', dpi=300)
+plt.savefig('./imgs/' + args.name + '/fig2a.eps', format='eps', dpi=300)
 plt.show()
 
-plt.scatter(df['time'][index], df['speed'][index], s=5, alpha=0.5)
-plt.plot(df['time'][index], df['smoothed_speed'][index], c='#FF7F50', lw=3)
-# ~ plt.ylim(0,200)
+
+# FIGURE 2 B
+plt.figure(figsize=(10, 6))  # Adjust figure size as needed.
+
+for individual_id in unique_ids:
+    indiv_data = df.loc[df['id'] == individual_id, ['smoothed_speed', 'time']].reset_index()
+    index = tr.reject_outliers(indiv_data['smoothed_speed'], m = 6)
+    index = np.array(index[0])
+    indiv_data=indiv_data.loc[index,]
+    indiv_data['cum_dist'] = indiv_data['smoothed_speed'].cumsum() #no need conversion, because smooth speed is already in cm
+    plt.scatter(indiv_data['time'], indiv_data['cum_dist'], s=8, alpha=0.5, label=f'ID {individual_id}')
+
+plt.xlabel('Time (s)')
+if xdist:
+    plt.ylabel('Cumulative distance using Savitzky-Golay filter (cm)')
+else:
+    plt.ylabel('Cumulative distance using Savitzky-Golay filter (px)')
+plt.legend(title='Individuals', loc='upper right')
+plt.tight_layout()
+plt.savefig('./imgs/' + args.name + '/fig2b.eps', format='eps', dpi=300)
+plt.show()
+
+
+# FIGURE 2 C
+plt.figure(figsize=(10, 6))  # Adjust figure size as needed.
+
+for individual_id in unique_ids:
+    indiv_data = df[df['id'] == individual_id].reset_index()
+    index = tr.reject_outliers(indiv_data['smoothed_speed'], m = 6)
+    index = np.array(index[0])
+    plt.scatter(indiv_data['time'][index], indiv_data['speed'][index], s=5, alpha=0.5, label=f'ID {individual_id}')
+    plt.plot(indiv_data['time'][index], indiv_data['smoothed_speed'][index], lw=3)
+
 plt.xlabel('Time')
-plt.ylabel('Speed (cm/s)')
+if xdist:
+    plt.ylabel('Speed (cm/s)')
+else:
+    plt.ylabel('Speed (px/s)')
 plt.tight_layout()
-plt.savefig('./imgs/' + args.name + '/ex1_fig2b.eps', format='eps', dpi=300)
+plt.legend(title='Individuals', loc='upper right')
+plt.savefig('./imgs/' + args.name + '/fig2c.eps', format='eps', dpi=300)
 plt.show()
 
-plt.scatter(df['time'][index], df['accn'][index], s=5, alpha=0.5)
-plt.plot(df['time'][index], df['smoothed_accn'][index], c='#FF7F50', lw=3)
-# ~ plt.ylim(0,200000)
+
+# FIGURE 2 C
+plt.figure(figsize=(10, 6))  # Adjust figure size as needed.
+
+for individual_id in unique_ids:
+    indiv_data = df[df['id'] == individual_id].reset_index()
+    index = tr.reject_outliers(indiv_data['smoothed_speed'], m = 6)
+    index = np.array(index[0])
+    plt.scatter(indiv_data['time'][index], indiv_data['speed'][index], s=5, alpha=0.5, label=f'ID {individual_id}')
+    plt.plot(indiv_data['time'][index], indiv_data['smoothed_speed'][index], lw=3)
+
 plt.xlabel('Time')
-plt.ylabel('Acceleration (cm/sq.s)')
+if xdist:
+    plt.ylabel('Speed (cm/s)')
+else:
+    plt.ylabel('Speed (px/s)')
 plt.tight_layout()
-plt.savefig('./imgs/' + args.name + '/ex1_fig2c.eps', format='eps', dpi=300)
+plt.legend(title='Individuals', loc='upper right')
+plt.savefig('./imgs/' + args.name + '/fig2c.eps', format='eps', dpi=300)
 plt.show()
-
-
-# In[ ]:
-
-
-
 
