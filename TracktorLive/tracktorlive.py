@@ -17,6 +17,7 @@ import warnings
 #from cv2 import cv2#uncomment for linting
 import cv2#comment for linting
 import numpy as np
+import matplotlib.pyplot as plt
 import pandas as pd
 import scipy.signal
 from scipy.optimize import linear_sum_assignment
@@ -91,6 +92,8 @@ if args.file and args.camera:
 if not args.file and not args.camera:
     parser.print_help()
     raise SyntaxError("At least one argument, file or camera, is required.")
+
+# NOTE: first-fram + GUI can be a separate script
 ##############
 # video file
 ##############
@@ -244,6 +247,7 @@ if block_size % 2 ==0:
 #print(f" Block size (*should always be odd!): {block_size} \n Offset: {offset} \n Min area: {min_blob_size} \n Max area: {max_blob_size}")
 
 #in case we change some parameter, we update the parameter file, otherwise we do not touch
+# NOTE: write below data to one binary file, rather than editing live code
 if block_size != initial_block_size or\
     offset != initial_offset or\
     max_blob_size != initial_max_blob_size or\
@@ -368,16 +372,18 @@ temp.to_csv(output_filepath, sep=',',index=False)
 #Start real-time tracking to trigger action or device
 if args.track:
     # Run the shell script (non-blocking) and capture the process
+    # NOTE: replace this with pyserial based separate mp.Process(...)
     script_path = "./tracking.sh"  # Make sure the tracking script is in the same folder, and that you gave permission to execute it.
     process = subprocess.Popen(["bash", script_path])
 
 
-t0=time.time() #take start time
+if args.camera:
+    t0=time.time() #take start time
 while(True):
     # Capture frame-by-frame
     ret, frame = cap.read()
     this = cap.get(1) ######
-    if ret == True:
+    if ret:
         frame = cv2.resize(frame, None, fx = scaling, fy = scaling, interpolation = cv2.INTER_LINEAR)
         thresh = tr.colour_to_thresh(frame, block_size, offset)
         final, contours, meas_last, meas_now = tr.detect_and_draw_contours(frame, thresh, meas_last, meas_now, min_area, max_area)
@@ -398,6 +404,7 @@ while(True):
             final, meas_now, df = tr.reorder_and_draw(final, colours, n_inds, col_ind, meas_now, df, mot, this)
             # Create output dataframe
             for i in range(n_inds):
+                # NOTE: write function for velocity computation
                 if args.direction:
                     Xt=meas_now[i][0]-prev[i][0]
                     Yt=meas_now[i][1]-prev[i][1]
@@ -444,7 +451,6 @@ else:
 # For video, change column name
 if args.file:
     df.rename(columns={'time':'frame'}, inplace=True)
-    print(df)
     df.to_csv(output_filepath, sep=',', index=False)
 
 # For live tracking, add frame column (this is an approximation as we do not control the FPS rate here)
@@ -469,214 +475,210 @@ cv2.waitKey(1)
 #---------------------------------------------------------------------#
 #           Create missing folders, change name and move files
 #---------------------------------------------------------------------#
-import matplotlib.pyplot as plt
 
+#FIXME: in this block, check for OS consistency
 if os.path.isdir('./imgs'):
     pass
 else:
     os.mkdir('imgs')
     
-if os.path.isdir('./imgs/{0}'.format(args.name)):
+if os.path.isdir(f'./imgs/{args.name}'):
     pass
 else:
-    os.mkdir('./imgs/{0}'.format(args.name))
+    os.mkdir(f'./imgs/{args.name}')
     
-os.system("mv ./processing_file.csv ./imgs/{0}/{0}.csv".format(args.name))
-os.system("mv ./processing_file.mp4 ./imgs/{0}/{0}.mp4".format(args.name))
+os.system(f"mv ./processing_file.csv ./imgs/{args.name}/{args.name}.csv")
+os.system(f"mv ./processing_file.mp4 ./imgs/{args.name}/{args.name}.mp4")
 
-#---------------------------------------------------------------------#
-
-########################################################################
-########################################################################
-#               SUMMARY STATISTICS & PLOTS
-########################################################################
-########################################################################
-
-# The cells below provide functions to perform basic summary statistics.
-# In this case, distance moved between successive frames, cumulative distance, velocity and acceleration.
-
-# In[5]:
-
-# The smoothing window parameter determines the extent of smoothing (this parameter must be odd)
-smoothing_window = 5
-
-#1. Inverse Y axis
-if ymax >= max(df["pos_y"]): 
-    df["pos_y"] = ymax - df["pos_y"]
-else:
-    df["pos_y"] = max(df["pos_y"]) - df["pos_y"]
-
-# 2. Compute velocity and acceleration
-dx = df['pos_x'] - df['pos_x'].shift(n_inds)
-dy = df['pos_y'] - df['pos_y'].shift(n_inds)
-d2x = dx - dx.shift(n_inds)
-d2y = dy - dy.shift(n_inds)
-df['speed'] = np.sqrt(dx**2 + dy**2)
-df['smoothed_speed'] = scipy.signal.savgol_filter(df['speed'], smoothing_window, 1)
-df['accn'] = np.sqrt(d2x**2 + d2y**2)
-df['smoothed_accn'] = scipy.signal.savgol_filter(df['accn'], smoothing_window, 1)
-df.head()
-
-
-# FIGURE 1 A
-# Tracked path
-if n_inds==1:
-    plt.figure(figsize=(5,5))
-    plt.scatter(df['pos_x'], df['pos_y'], c=df['frame'], alpha=0.5)
-    plt.xlabel('X', fontsize=16)
-    plt.ylabel('Y', fontsize=16)
-    plt.tight_layout()
-    plt.savefig('imgs/' + args.name + '/ex1_fig1a.eps', format='eps', dpi=300)
-    plt.show()
-else: #for more than 1 individual
-    plt.figure(figsize=(5,5))
-    plt.scatter(df['pos_x'], df['pos_y'], c=df['id'], cmap= 'jet', alpha=0.5)
-    plt.xlabel('X', fontsize=16)
-    plt.ylabel('Y', fontsize=16)
-    plt.tight_layout()
-    plt.savefig('imgs/' + args.name + '/ex1_fig1a.eps', format='eps', dpi=300)
-    plt.show()
-
-# FIGURE 1 B
-# Density plot
-plt.figure(figsize=(5,5))
-plt.hist2d(df['pos_x'], df['pos_y'], bins=20)
-plt.xlabel('X', fontsize=16)
-plt.ylabel('Y', fontsize=16)
-plt.tight_layout()
-plt.savefig('./imgs/' + args.name + '/ex1_fig1b.eps', format='eps', dpi=300)
-plt.show()
-
-
-# In[6]:
-## Parameters like speed and acceleration can be very noisy. Small noise in positional data is amplified as we take the
-## derivative to get speed and acceleration. We therefore smooth this data to obtain reliable values and eliminate noise.
-
-#----------------------------------------------------------------------#
-#           Conversion to cm and seconds
-#----------------------------------------------------------------------#
-
-# Movement measures are converted from pixels and frames to real-world measures (cms and secs)
-
-# Pixels per cm to in the recorded video to calculate distances
-# if resolution and distance in cm was given, it will be used here, otherwise we use standard conversion of px to cm,
-# which may not be accurate.
-
-if xdist:
-    pxpercm = (xmax/xdist) * scaling
-else:
-    # ~ pxpercm = 1/0.026 * scaling
-    pxpercm = 1 #keep 
-
-#Convert px to cm
-if args.file:
-    df['time'] = df['frame'] * fps
-    df['speed'] = df['speed'] * fps / pxpercm
-    df['smoothed_speed'] = df['smoothed_speed'] * fps / pxpercm
-    df['accn'] = df['accn'] *fps * fps / pxpercm
-    df['smoothed_accn'] = df['smoothed_accn'] * fps * fps / pxpercm
-    # ~ df['cum_dist'] = df['cum_dist'] / pxpercm -- this is done later
-    df.head()
-elif args.camera:
-    dt = df['time'] - df['time'].shift(n_inds)
-    df['speed'] = (df['speed'] / dt) * (1 / pxpercm)
-    df['smoothed_speed'] = (df['smoothed_speed'] / dt) * (1 / pxpercm)
-    df['accn'] = (df['accn'] /(dt*dt)) * (1 / pxpercm)
-    df['smoothed_accn'] = (df['smoothed_accn'] / (dt*dt)) * (1 / pxpercm)
-    # ~ df['cum_dist'] = df['cum_dist'] / pxpercm -- this is done later
-    df.head()
-
-np.nanmax(df['smoothed_speed']), np.nanmax(df['smoothed_accn'])
-
-
-# In[7]:
-
-## We now remove any outliers that remain post smoothing
-## Here we want to be conservative and not eliminate any relavant points as outliers. We therefore choose a high 'm' value
-## in the reject_outliers functions. The best approach is to visually compare smoothed data with the original data
-
-# FIGURE 2 A
-unique_ids = df['id'].unique()
-
-plt.figure(figsize=(10, 6))  # Adjust figure size as needed.
-
-for individual_id in unique_ids:
-    indiv_data = df.loc[df['id'] == individual_id, ['speed', 'time']].reset_index()
-    index = tr.reject_outliers(indiv_data['speed'], m = 6)
-    index = np.array(index[0])
-    indiv_data=indiv_data.loc[index,]
-    indiv_data['cum_dist'] = indiv_data['speed'].cumsum() #no need conversion, because smooth speed is already in cm
-    plt.scatter(indiv_data['time'], indiv_data['cum_dist'], s=8, alpha=0.5, label=f'ID {individual_id}')
-
-plt.xlabel('Time (s)')
-if xdist:
-    plt.ylabel('Cumulative distance (cm)')
-else:
-    plt.ylabel('Cumulative distance (px)')
-plt.legend(title='Individuals', loc='upper right')
-plt.tight_layout()
-plt.savefig('./imgs/' + args.name + '/ex1_fig2a.eps', format='eps', dpi=300)
-plt.show()
-
-
-# FIGURE 2 B
-plt.figure(figsize=(10, 6))  # Adjust figure size as needed.
-
-for individual_id in unique_ids:
-    indiv_data = df.loc[df['id'] == individual_id, ['smoothed_speed', 'time']].reset_index()
-    index = tr.reject_outliers(indiv_data['smoothed_speed'], m = 6)
-    index = np.array(index[0])
-    indiv_data=indiv_data.loc[index,]
-    indiv_data['cum_dist'] = indiv_data['smoothed_speed'].cumsum() #no need conversion, because smooth speed is already in cm
-    plt.scatter(indiv_data['time'], indiv_data['cum_dist'], s=8, alpha=0.5, label=f'ID {individual_id}')
-
-plt.xlabel('Time (s)')
-if xdist:
-    plt.ylabel('Cumulative distance using Savitzky-Golay filter (cm)')
-else:
-    plt.ylabel('Cumulative distance using Savitzky-Golay filter (px)')
-plt.legend(title='Individuals', loc='upper right') 
-plt.tight_layout()
-plt.savefig('./imgs/' + args.name + '/ex1_fig2b.eps', format='eps', dpi=300)
-plt.show()
-
-# FIGURE 2 C
-plt.figure(figsize=(10, 6))  # Adjust figure size as needed.
-
-for individual_id in unique_ids:
-    indiv_data = df[df['id'] == individual_id].reset_index()
-    index = tr.reject_outliers(indiv_data['smoothed_speed'], m = 6)
-    index = np.array(index[0])
-    plt.scatter(indiv_data['time'][index], indiv_data['speed'][index], s=5, alpha=0.5, label=f'ID {individual_id}')
-    plt.plot(indiv_data['time'][index], indiv_data['smoothed_speed'][index], lw=3)
-
-plt.xlabel('Time')
-if xdist:
-    plt.ylabel('Speed (cm/s)')
-else:
-    plt.ylabel('Speed (px/s)')
-plt.tight_layout()
-plt.legend(title='Individuals', loc='upper right')
-plt.savefig('./imgs/' + args.name + '/ex1_fig2c.eps', format='eps', dpi=300)
-plt.show()
-
-
-# FIGURE 2 D
-plt.figure(figsize=(10, 6))  # Adjust figure size as needed.
-
-for individual_id in unique_ids:
-    indiv_data = df[df['id'] == individual_id].reset_index()
-    index = tr.reject_outliers(indiv_data['smoothed_speed'], m = 6)
-    index = np.array(index[0])
-    plt.scatter(indiv_data.loc[index,'time'], indiv_data.loc[index,'accn'], s=5, alpha=0.5, label=f'ID {individual_id}')
-    plt.plot(indiv_data.loc[index,'time'], indiv_data.loc[index, 'smoothed_accn'], lw=3)
-
-plt.xlabel('Time')
-if xdist:
-    plt.ylabel('Acceleration (cm/sq.s)')
-else:
-    plt.ylabel('Acceleration (px/sq.s)')
-plt.tight_layout()
-plt.savefig('./imgs/' + args.name + '/ex1_fig2d.eps', format='eps', dpi=300)
-plt.show()
+# NOTE: recommend deleting everything below this. can be a separate script if absolutely necessary
+###               SUMMARY STATISTICS & PLOTS
+##
+##
+### The cells below provide functions to perform basic summary statistics.
+### In this case, distance moved between successive frames, cumulative distance, velocity and acceleration.
+##
+### In[5]:
+##
+### The smoothing window parameter determines the extent of smoothing (this parameter must be odd)
+##smoothing_window = 5
+##
+###1. Inverse Y axis
+##if ymax >= max(df["pos_y"]): 
+##    df["pos_y"] = ymax - df["pos_y"]
+##else:
+##    df["pos_y"] = max(df["pos_y"]) - df["pos_y"]
+##
+### 2. Compute velocity and acceleration
+##dx = df['pos_x'] - df['pos_x'].shift(n_inds)
+##dy = df['pos_y'] - df['pos_y'].shift(n_inds)
+##d2x = dx - dx.shift(n_inds)
+##d2y = dy - dy.shift(n_inds)
+##df['speed'] = np.sqrt(dx**2 + dy**2)
+##df['smoothed_speed'] = scipy.signal.savgol_filter(df['speed'], smoothing_window, 1)
+##df['accn'] = np.sqrt(d2x**2 + d2y**2)
+##df['smoothed_accn'] = scipy.signal.savgol_filter(df['accn'], smoothing_window, 1)
+##df.head()
+##
+##
+### FIGURE 1 A
+### Tracked path
+##if n_inds==1:
+##    plt.figure(figsize=(5,5))
+##    plt.scatter(df['pos_x'], df['pos_y'], c=df['frame'], alpha=0.5)
+##    plt.xlabel('X', fontsize=16)
+##    plt.ylabel('Y', fontsize=16)
+##    plt.tight_layout()
+##    plt.savefig('imgs/' + args.name + '/ex1_fig1a.eps', format='eps', dpi=300)
+##    plt.show()
+##else: #for more than 1 individual
+##    plt.figure(figsize=(5,5))
+##    plt.scatter(df['pos_x'], df['pos_y'], c=df['id'], cmap= 'jet', alpha=0.5)
+##    plt.xlabel('X', fontsize=16)
+##    plt.ylabel('Y', fontsize=16)
+##    plt.tight_layout()
+##    plt.savefig('imgs/' + args.name + '/ex1_fig1a.eps', format='eps', dpi=300)
+##    plt.show()
+##
+### FIGURE 1 B
+### Density plot
+##plt.figure(figsize=(5,5))
+##plt.hist2d(df['pos_x'], df['pos_y'], bins=20)
+##plt.xlabel('X', fontsize=16)
+##plt.ylabel('Y', fontsize=16)
+##plt.tight_layout()
+##plt.savefig('./imgs/' + args.name + '/ex1_fig1b.eps', format='eps', dpi=300)
+##plt.show()
+##
+##
+### In[6]:
+#### Parameters like speed and acceleration can be very noisy. Small noise in positional data is amplified as we take the
+#### derivative to get speed and acceleration. We therefore smooth this data to obtain reliable values and eliminate noise.
+##
+###----------------------------------------------------------------------#
+###           Conversion to cm and seconds
+###----------------------------------------------------------------------#
+##
+### Movement measures are converted from pixels and frames to real-world measures (cms and secs)
+##
+### Pixels per cm to in the recorded video to calculate distances
+### if resolution and distance in cm was given, it will be used here, otherwise we use standard conversion of px to cm,
+### which may not be accurate.
+##
+##if xdist:
+##    pxpercm = (xmax/xdist) * scaling
+##else:
+##    # ~ pxpercm = 1/0.026 * scaling
+##    pxpercm = 1 #keep 
+##
+###Convert px to cm
+##if args.file:
+##    df['time'] = df['frame'] * fps
+##    df['speed'] = df['speed'] * fps / pxpercm
+##    df['smoothed_speed'] = df['smoothed_speed'] * fps / pxpercm
+##    df['accn'] = df['accn'] *fps * fps / pxpercm
+##    df['smoothed_accn'] = df['smoothed_accn'] * fps * fps / pxpercm
+##    # ~ df['cum_dist'] = df['cum_dist'] / pxpercm -- this is done later
+##    df.head()
+##elif args.camera:
+##    dt = df['time'] - df['time'].shift(n_inds)
+##    df['speed'] = (df['speed'] / dt) * (1 / pxpercm)
+##    df['smoothed_speed'] = (df['smoothed_speed'] / dt) * (1 / pxpercm)
+##    df['accn'] = (df['accn'] /(dt*dt)) * (1 / pxpercm)
+##    df['smoothed_accn'] = (df['smoothed_accn'] / (dt*dt)) * (1 / pxpercm)
+##    # ~ df['cum_dist'] = df['cum_dist'] / pxpercm -- this is done later
+##    df.head()
+##
+##np.nanmax(df['smoothed_speed']), np.nanmax(df['smoothed_accn'])
+##
+##
+### In[7]:
+##
+#### We now remove any outliers that remain post smoothing
+#### Here we want to be conservative and not eliminate any relavant points as outliers. We therefore choose a high 'm' value
+#### in the reject_outliers functions. The best approach is to visually compare smoothed data with the original data
+##
+### FIGURE 2 A
+##unique_ids = df['id'].unique()
+##
+##plt.figure(figsize=(10, 6))  # Adjust figure size as needed.
+##
+##for individual_id in unique_ids:
+##    indiv_data = df.loc[df['id'] == individual_id, ['speed', 'time']].reset_index()
+##    index = tr.reject_outliers(indiv_data['speed'], m = 6)
+##    index = np.array(index[0])
+##    indiv_data=indiv_data.loc[index,]
+##    indiv_data['cum_dist'] = indiv_data['speed'].cumsum() #no need conversion, because smooth speed is already in cm
+##    plt.scatter(indiv_data['time'], indiv_data['cum_dist'], s=8, alpha=0.5, label=f'ID {individual_id}')
+##
+##plt.xlabel('Time (s)')
+##if xdist:
+##    plt.ylabel('Cumulative distance (cm)')
+##else:
+##    plt.ylabel('Cumulative distance (px)')
+##plt.legend(title='Individuals', loc='upper right')
+##plt.tight_layout()
+##plt.savefig('./imgs/' + args.name + '/ex1_fig2a.eps', format='eps', dpi=300)
+##plt.show()
+##
+##
+### FIGURE 2 B
+##plt.figure(figsize=(10, 6))  # Adjust figure size as needed.
+##
+##for individual_id in unique_ids:
+##    indiv_data = df.loc[df['id'] == individual_id, ['smoothed_speed', 'time']].reset_index()
+##    index = tr.reject_outliers(indiv_data['smoothed_speed'], m = 6)
+##    index = np.array(index[0])
+##    indiv_data=indiv_data.loc[index,]
+##    indiv_data['cum_dist'] = indiv_data['smoothed_speed'].cumsum() #no need conversion, because smooth speed is already in cm
+##    plt.scatter(indiv_data['time'], indiv_data['cum_dist'], s=8, alpha=0.5, label=f'ID {individual_id}')
+##
+##plt.xlabel('Time (s)')
+##if xdist:
+##    plt.ylabel('Cumulative distance using Savitzky-Golay filter (cm)')
+##else:
+##    plt.ylabel('Cumulative distance using Savitzky-Golay filter (px)')
+##plt.legend(title='Individuals', loc='upper right') 
+##plt.tight_layout()
+##plt.savefig('./imgs/' + args.name + '/ex1_fig2b.eps', format='eps', dpi=300)
+##plt.show()
+##
+### FIGURE 2 C
+##plt.figure(figsize=(10, 6))  # Adjust figure size as needed.
+##
+##for individual_id in unique_ids:
+##    indiv_data = df[df['id'] == individual_id].reset_index()
+##    index = tr.reject_outliers(indiv_data['smoothed_speed'], m = 6)
+##    index = np.array(index[0])
+##    plt.scatter(indiv_data['time'][index], indiv_data['speed'][index], s=5, alpha=0.5, label=f'ID {individual_id}')
+##    plt.plot(indiv_data['time'][index], indiv_data['smoothed_speed'][index], lw=3)
+##
+##plt.xlabel('Time')
+##if xdist:
+##    plt.ylabel('Speed (cm/s)')
+##else:
+##    plt.ylabel('Speed (px/s)')
+##plt.tight_layout()
+##plt.legend(title='Individuals', loc='upper right')
+##plt.savefig('./imgs/' + args.name + '/ex1_fig2c.eps', format='eps', dpi=300)
+##plt.show()
+##
+##
+### FIGURE 2 D
+##plt.figure(figsize=(10, 6))  # Adjust figure size as needed.
+##
+##for individual_id in unique_ids:
+##    indiv_data = df[df['id'] == individual_id].reset_index()
+##    index = tr.reject_outliers(indiv_data['smoothed_speed'], m = 6)
+##    index = np.array(index[0])
+##    plt.scatter(indiv_data.loc[index,'time'], indiv_data.loc[index,'accn'], s=5, alpha=0.5, label=f'ID {individual_id}')
+##    plt.plot(indiv_data.loc[index,'time'], indiv_data.loc[index, 'smoothed_accn'], lw=3)
+##
+##plt.xlabel('Time')
+##if xdist:
+##    plt.ylabel('Acceleration (cm/sq.s)')
+##else:
+##    plt.ylabel('Acceleration (px/sq.s)')
+##plt.tight_layout()
+##plt.savefig('./imgs/' + args.name + '/ex1_fig2d.eps', format='eps', dpi=300)
+##plt.show()
 
