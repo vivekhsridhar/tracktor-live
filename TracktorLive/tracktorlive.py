@@ -36,8 +36,8 @@ parser.add_argument('-c', '--camera',
 parser.add_argument('-f', '--file',
                 required=False, help='complete file path')
 parser.add_argument('-d', '--direction',
-                required=False, help='introduce desired minimal distance in px\
-                to move to store direction/angle of individual in real time')
+                required=False, help='minimum distance in px required\
+                to compute direction/angle of individual movement')
 parser.add_argument('-t', '--track',
                 required = False, help='whether tracktor-live should launch the\
                 tracking script to trigger specific actions when objects are\
@@ -152,45 +152,71 @@ max_blob_size=np.copy(initial_max_blob_size)
 
 # Function to process the image based on current parameters
 def process_image(block_size, offset):
-#    # Convert to grayscale
-#    current_image = image.copy()
-#    gray = cv2.cvtColor(current_image, cv2.COLOR_BGR2GRAY)
-#    # Ensure block_size is odd and greater than 1
-#    block_size = max(3, block_size)  # Ensure minimum value of 3 (an odd number)
-#    if block_size % 2 == 0:
-#        block_size += 1  # Ensure block_size is odd
+    current_image = image.copy()
+    # Ensure block_size is odd and greater than 1
+    block_size = max(3, block_size)  # Ensure minimum value of 3 (an odd number)
 #    # Apply adaptive thresholding
-#    thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, block_size, offset)
-#    thresh = cv2.bitwise_not(thresh)
+    thresh = tr.colour_to_thresh(current_image, block_size=block_size,
+            offset=offset,
+            blur=False,
+            invert=False
+            )
+#    gray = cv2.cvtColor(current_image, cv2.COLOR_BGR2GRAY)
+
 #    # Contours
-#    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-#    # Draw contours and calculate area (number of pixels) per blob
-#    for contour in contours:
-#        area = cv2.contourArea(contour)
-#        if min_blob_size < area < max_blob_size:
-#            cv2.drawContours(current_image, [contour], -1, (0, 255, 0), 2)
-#            # Calculate centroid (center) of the contour
-#            M = cv2.moments(contour)
-#            if M["m00"] != 0:
-#                cx = int(M["m10"] / M["m00"])
-#                cy = int(M["m01"] / M["m00"])
-#                # Display area at the centroid
-#                cv2.putText(current_image, f'{area}', (cx - 20, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-#     # Display the thresholded image
-#    # ~ cv2.imshow('Thresholded Image', thresh) #can choose to
-#    cv2.imshow('Threshold Image', current_image)
+    contours, _ = cv2.findContours(thresh,
+                                    cv2.RETR_EXTERNAL,
+                                    cv2.CHAIN_APPROX_SIMPLE
+                                )
+    # Draw contours and calculate area (number of pixels) per blob
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if min_blob_size < area < max_blob_size:
+            cv2.drawContours(current_image, [contour], -1, (0, 255, 0), 2)
+            # Calculate centroid (center) of the contour
+            M = cv2.moments(contour)
+            if M["m00"] != 0:
+                cx = int(M["m10"] / M["m00"])
+                cy = int(M["m01"] / M["m00"])
+                # Display area at the centroid
+                cv2.putText(current_image, f'{area}',
+                                (cx - 20, cy),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.5,
+                                (255, 255, 255),
+                                2
+                            )
+     # Display the thresholded image
+    cv2.imshow('Threshold Image', current_image)
 
 # Initialize trackbars window and callback function
 cv2.namedWindow('Threshold Parameters')
 
 # Create trackbars for parameter adjustment
-cv2.createTrackbar('Block size', 'Threshold Parameters', initial_block_size, 81, lambda x: None)  # Maximum value 81 for odd numbers
-cv2.createTrackbar('Offset', 'Threshold Parameters', initial_offset, 50, lambda x: None)
-cv2.createTrackbar('Min blob size', 'Threshold Parameters', initial_min_blob_size, 1000, lambda x: None)
-cv2.createTrackbar('Max blob size', 'Threshold Parameters', initial_max_blob_size, 1000, lambda x: None)
+cv2.createTrackbar('Block size', 'Threshold Parameters',
+                    initial_block_size,
+                    81,
+                    lambda x: None
+                )  # Maximum value 81 for odd numbers
+cv2.createTrackbar('Offset',
+                    'Threshold Parameters',
+                    initial_offset,
+                    50,
+                    lambda x: None
+                )
+cv2.createTrackbar('Min blob size',
+                        'Threshold Parameters',
+                        initial_min_blob_size,
+                        1000,
+                        lambda x: None
+                    )
+cv2.createTrackbar('Max blob size',
+                        'Threshold Parameters',
+                        initial_max_blob_size,
+                        1000,
+                        lambda x: None
+                    )
 
-#####################
-# Initial processing
 process_image(initial_block_size, initial_offset)
 
 # Main loop to update parameters and display image
@@ -214,13 +240,14 @@ cv2.destroyAllWindows()
 #if block size is not odd, we convert to odd
 if block_size % 2 ==0:
     block_size+=1
-else:
-    pass
 
-print(f" Block size (*should always be odd!): {block_size} \n Offset: {offset} \n Min area: {min_blob_size} \n Max area: {max_blob_size}")
+#print(f" Block size (*should always be odd!): {block_size} \n Offset: {offset} \n Min area: {min_blob_size} \n Max area: {max_blob_size}")
 
 #in case we change some parameter, we update the parameter file, otherwise we do not touch
-if block_size!=initial_block_size or offset!=initial_offset or max_blob_size!=initial_max_blob_size or min_blob_size!=initial_min_blob_size:
+if block_size != initial_block_size or\
+    offset != initial_offset or\
+    max_blob_size != initial_max_blob_size or\
+    min_blob_size != initial_min_blob_size:
     #update parameters in params.py
     with open('params.py','r',encoding='utf-8') as file:
         data = file.readlines()    
@@ -232,10 +259,6 @@ if block_size!=initial_block_size or offset!=initial_offset or max_blob_size!=in
         file.writelines(data)
     #reload parameters in case they were modified
     importlib.reload(params)
-
-########################################################################
-########################################################################
-########################################################################
 
 ########################################################################
 #                   Parameter implementation
@@ -274,32 +297,30 @@ codec = 'DIVX' # try other codecs if the default doesn't work ('DIVX', 'avc1', '
 
 # In[3]:
 
-########################################################################
 #----------------------------------------------------------------------#
 #                           TRACKING CODE
 #----------------------------------------------------------------------#
-########################################################################
 
 ##############
 # video file
 ##############
 if args.file:
-    print(f"File path: {args.file}")
     # Open the video file
     cap = cv2.VideoCapture(args.file)
     # Check if video opened successfully
-    if cap.isOpened() == False:
-        sys.exit('Video file cannot be read! Please check input_vidpath to ensure it is correctly pointing to the video file')
+    assert cap.isOpened(), 'video file cannot be read! Please check\
+                            input_vidpath to ensure it is correctly pointing\
+                            to the video file')
 
 ##############
 # live feed
 ##############
 if args.camera:
-    print(f"Camera ID: {args.camera}")
     # ~ cap = cv2.VideoCapture(int(args.camera))
     cap = cv2.VideoCapture(int(args.camera))
-    if cap.isOpened() == False:
-        sys.exit("Cannot open camera. You can try using v4l2-ctl --list-devices or ls /dev/video* to see available devices")
+    assert cap.isOpened(), "cannot open camera. You can try using v4l2-ctl\
+                            --list-devices or ls /dev/video* to see available\
+                            devices")
 
 
 ########################################################################
@@ -309,8 +330,14 @@ if args.camera:
 ## Video writer class to output video with contour and centroid of tracked object(s)
 # make sure the frame size matches size of array 'final'
 fourcc = cv2.VideoWriter_fourcc(*codec)
-output_framesize = (int(cap.read()[1].shape[1]*scaling),int(cap.read()[1].shape[0]*scaling))
-out = cv2.VideoWriter(filename = output_vidpath, fourcc = fourcc, fps = 30.0, frameSize = output_framesize, isColor = True)
+output_framesize = (int(cap.read()[1].shape[1]*scaling),
+                        int(cap.read()[1].shape[0]*scaling))
+out = cv2.VideoWriter(filename = output_vidpath,
+                        fourcc = fourcc,
+                        fps = 30.0,
+                        frameSize = output_framesize,
+                        isColor = True
+                    )
 
 ## Individual location(s) measured in the last and current step
 meas_last = list(np.zeros((n_inds,2)))
@@ -321,8 +348,12 @@ df = []
 #----------------------------------------------------------------------#
 #               Check if direction is needed or not
 #----------------------------------------------------------------------#
-#Direction = minimal distance (in px) for the animal or object to move in order to compute direction. In other words, if the animal doesn't move more than this distance, we take the previous direction.
-#This is to avoid computing direction when the animal is still, which can lead to errors. This is only used if the argument is given, otherwise Tracktor will not compute direction.
+# Direction = minimal distance (in px) for the animal or object to move in order
+# to compute direction. In other words, if the animal doesn't move more than this
+# distance, we take the previous direction.  This is to avoid computing direction
+# when the animal is still, which can lead to errors. This is only used if the
+# argument is given, otherwise Tracktor will not compute direction.
+
 if args.direction:
     direction = args.direction
     angle = 0 #angle, we start with zero as default

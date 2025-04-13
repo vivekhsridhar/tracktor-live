@@ -22,7 +22,8 @@ from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 from sklearn.cluster import KMeans
 
-def colour_to_thresh(frame, block_size = 31, offset = 25):
+def colour_to_thresh(frame, block_size = 31, offset = 25, blur=True,
+                        invert=True):
     """
     This function retrieves a video frame and preprocesses it for object
     tracking.  The code blurs image to reduce noise, converts it to greyscale
@@ -38,12 +39,23 @@ def colour_to_thresh(frame, block_size = 31, offset = 25):
         the programme will add 1 to the block_size to make it odd.
     offset: int(optional), default = 25 
         constant subtracted from the mean value within the block
+    blur (bool): whether to blur given frame
+    invert (bool): whether to invert frame color
         
     Returns
     -------
     thresh: ndarray, shape(n_rows, n_cols, 1) binarised(0,255) image
     """
-    frame = cv2.blur(frame, (5,5))
+
+    if blur:
+        frame = cv2.blur(frame, (5,5))
+    if block_size % 2 == 0:
+        block_size += 1
+
+    if invert:
+        threshtype = cv2.THRESH_BINARY_INV
+    else:
+        threshtype = cv2.THRESH_BINARY
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     thresh = cv2.adaptiveThreshold(gray,
                                     255,
@@ -91,12 +103,12 @@ def detect_and_draw_contours(frame, thresh, meas_last,
     # Detect contours and draw them based on specified area thresholds
     if int(cv2.__version__[0]) == 3:
         _, contours, _ = cv2.findContours(thresh.copy(),
-                                                    cv2.RETR_TREE,
+                                                    cv2.RETR_EXTERNAL,
                                                     cv2.CHAIN_APPROX_SIMPLE
                                                 )
     else:
         contours, _ = cv2.findContours(thresh.copy(),
-                                                    cv2.RETR_TREE,
+                                                    cv2.RETR_EXTERNAL,
                                                     cv2.CHAIN_APPROX_SIMPLE
                                                 )
 
