@@ -1,40 +1,64 @@
+#!/usr/bin/env python3
+# (C) Vivek Hari Sridhar, 2019
+# vivekhsridhar.com
+# Made free and open source under an MIT License
+
+
+"""
+An image-based tracking freeware designed to perform single-object tracking in
+noisy environments, or multi-object tracking in uniform environments while
+maintaining individual identities. Tracktor is code-based but requires no
+coding skills other than the user being able to specify tracking parameters in
+a designated location, much like in a graphical user interface. The
+installation and use of the software is fully detailed in a user manual.
+
+See more: https://doi.org/10.1111/2041-210X.13166
+"""
+
+#from cv2 import cv2#uncomment if you need to pylint
+import cv2#comment if you need to pylint
 import numpy as np
-from cv2 import cv2#FIXME
-#import cv2
-from sklearn.cluster import KMeans
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
+from sklearn.cluster import KMeans
 
 def colour_to_thresh(frame, block_size = 31, offset = 25):
     """
-    This function retrieves a video frame and preprocesses it for object tracking.
-    The code blurs image to reduce noise, converts it to greyscale and then returns a 
-    thresholded version of the original image.
+    This function retrieves a video frame and preprocesses it for object
+    tracking.  The code blurs image to reduce noise, converts it to greyscale
+    and then returns a thresholded version of the original image.
     
     Parameters
-    ----------
+    ---------- 
     frame: ndarray, shape(n_rows, n_cols, 3)
-        source image containing all three colour channels
+        source image containing all three colour channels 
     block_size: int(optional), default = 31
-        block_size determines the width of the kernel used for adaptive thresholding.
-        Note: block_size must be odd. If even integer is used, the programme will add
-        1 to the block_size to make it odd.
-    offset: int(optional), default = 25
+        block_size determines the width of the kernel used for adaptive
+        thresholding.  Note: block_size must be odd. If even integer is used,
+        the programme will add 1 to the block_size to make it odd.
+    offset: int(optional), default = 25 
         constant subtracted from the mean value within the block
         
     Returns
     -------
-    thresh: ndarray, shape(n_rows, n_cols, 1)
-        binarised(0,255) image
+    thresh: ndarray, shape(n_rows, n_cols, 1) binarised(0,255) image
     """
     frame = cv2.blur(frame, (5,5))
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, block_size, offset)
+    thresh = cv2.adaptiveThreshold(gray,
+                                    255,
+                                    cv2.ADAPTIVE_THRESH_MEAN_C,
+                                    cv2.THRESH_BINARY_INV,
+                                    block_size,
+                                    offset
+                                )
     return thresh
 
-def detect_and_draw_contours(frame, thresh, meas_last, meas_now, min_area = 0, max_area = 10000):
+def detect_and_draw_contours(frame, thresh, meas_last,
+                                meas_now, min_area = 0, max_area = 10000):
     """
-    This function detects contours, thresholds them based on area and draws them.
+    This function detects contours, thresholds them based on area and draws
+    them.
     
     Parameters
     ----------
@@ -57,7 +81,8 @@ def detect_and_draw_contours(frame, thresh, meas_last, meas_now, min_area = 0, m
         final output image composed of the input frame with object contours 
         and centroids overlaid on it
     contours: list
-        a list of all detected contours that pass the area based threhold criterion
+        a list of all detected contours that pass the area based threhold
+        criterion
     meas_last: array_like, dtype=float
         individual's location on previous frame
     meas_now: array_like, dtype=float
@@ -65,11 +90,18 @@ def detect_and_draw_contours(frame, thresh, meas_last, meas_now, min_area = 0, m
     """
     # Detect contours and draw them based on specified area thresholds
     if int(cv2.__version__[0]) == 3:
-    	img, contours, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        _, contours, _ = cv2.findContours(thresh.copy(),
+                                                    cv2.RETR_TREE,
+                                                    cv2.CHAIN_APPROX_SIMPLE
+                                                )
     else:
-    	contours, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    img = cv2.cvtColor(thresh.copy(), cv2.COLOR_GRAY2BGR)
+        contours, _ = cv2.findContours(thresh.copy(),
+                                                    cv2.RETR_TREE,
+                                                    cv2.CHAIN_APPROX_SIMPLE
+                                                )
 
+    # img = cv2.cvtColor(thresh.copy(), cv2.COLOR_GRAY2BGR)
+    # NOTE: diagnose above line
     final = frame.copy()
 
     i = 0
@@ -81,13 +113,13 @@ def detect_and_draw_contours(frame, thresh, meas_last, meas_now, min_area = 0, m
             contours = contours[:i] + contours[i+1:]
         else:
             cv2.drawContours(final, contours, i, (0,0,255), 1)
-            M = cv2.moments(contours[i])
-            if M['m00'] != 0:
-            	cx = M['m10']/M['m00']
-            	cy = M['m01']/M['m00']
+            mom = cv2.moments(contours[i])
+            if mom['m00'] != 0:
+                cx = mom['m10']/mom['m00']
+                cy = mom['m01']/mom['m00']
             else:
-            	cx = 0
-            	cy = 0
+                cx = 0
+                cy = 0
             meas_now.append([cx,cy])
             i += 1
     return final, contours, meas_last, meas_now
@@ -101,7 +133,8 @@ def apply_k_means(contours, n_inds, meas_now):
     Parameters
     ----------
     contours: list
-        a list of all detected contours that pass the area based threhold criterion
+        a list of all detected contours that pass the area based threhold
+        criterion.
     n_inds: int
         total number of individuals being tracked
     meas_now: array_like, dtype=float
@@ -110,7 +143,8 @@ def apply_k_means(contours, n_inds, meas_now):
     Returns
     -------
     contours: list
-        a list of all detected contours that pass the area based threhold criterion
+        a list of all detected contours that pass the area based threhold
+        criterion.
     meas_now: array_like, dtype=float
         individual's location on current frame
     """
@@ -119,7 +153,10 @@ def apply_k_means(contours, n_inds, meas_now):
     myarray = np.vstack(contours)
     myarray = myarray.reshape(myarray.shape[0], myarray.shape[2])
 
-    kmeans = KMeans(n_clusters=n_inds, random_state=0, n_init = 50).fit(myarray)
+    kmeans = KMeans(n_clusters=n_inds,
+                        random_state=0,
+                        n_init = 50
+                    ).fit(myarray)
     l = len(kmeans.cluster_centers_)
 
     for i in range(l):
@@ -182,7 +219,8 @@ def reorder_and_draw(final, colours, n_inds, col_ind, meas_now, df, mot, fr_no):
         final output image composed of the input frame with object contours 
         and centroids overlaid on it
     colours: list, tuple
-        list of tuples that represent colours used to assign individual identities
+        list of tuples that represent colours used to assign individual
+        identities
     n_inds: int
         total number of individuals being tracked
     col_ind: array, dtype=int64
@@ -210,22 +248,40 @@ def reorder_and_draw(final, colours, n_inds, col_ind, meas_now, df, mot, fr_no):
     equal = np.array_equal(col_ind, list(range(len(col_ind))))
     if not equal:
         current_ids = col_ind.copy()
-        reordered = [i[0] for i in sorted(enumerate(current_ids), key=lambda x:x[1])]
+        reordered = [i[0] for i in sorted(enumerate(current_ids),
+                                            key=lambda x:x[1]
+                                        )]
         meas_now = [x for (y,x) in sorted(zip(reordered,meas_now))]
 
     # Draw centroids
     if not mot:
         for i in range(len(meas_now)):
             if colours[i%4] == (0,0,255):
-                cv2.circle(final, tuple([int(x) for x in meas_now[i]]), 5, colours[i%4], -1, cv2.LINE_AA)
+               # cv2.circle(final, tuple([int(x) for x in meas_now[i]]),
+               #                                             5,
+               #                                             colours[i%4],
+               #                                             -1,
+               #                                             cv2.LINE_AA
+               #                                         )
+                cv2.circle(final, tuple((int(x) for x in meas_now[i])),
+                                                            5,
+                                                            colours[i%4],
+                                                            -1,
+                                                            cv2.LINE_AA
+                                                        )
     else:
         for i in range(n_inds):
-            cv2.circle(final, tuple([int(x) for x in meas_now[i]]), 5, colours[i%n_inds], -1, cv2.LINE_AA)
-    
+            cv2.circle(final, tuple((int(x) for x in meas_now[i])),
+                                            5,
+                                            colours[i%n_inds],
+                                            -1,
+                                            cv2.LINE_AA
+                                        )
+
     # add frame number
     font = cv2.FONT_HERSHEY_SCRIPT_SIMPLEX
     cv2.putText(final, str(int(fr_no)), (5,30), font, 1, (255,255,255), 2)
-        
+
     return final, meas_now, df
 
 def reject_outliers(data, m):
@@ -237,7 +293,8 @@ def reject_outliers(data, m):
     data: pandas.Series
         a column from a pandas dataframe that needs smoothing
     m: float
-        standard deviation cutoff beyond which, datapoint is considered as an outlier
+        standard deviation cutoff beyond which, datapoint is considered as an
+        outlier
         
     Returns
     -------
