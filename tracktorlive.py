@@ -376,7 +376,6 @@ if args.track:
     script_path = "./tracking.sh"  # Make sure the tracking script is in the same folder, and that you gave permission to execute it.
     process = subprocess.Popen(["bash", script_path])
 
-
 if args.camera:
     t0=time.time() #take start time
 while(True):
