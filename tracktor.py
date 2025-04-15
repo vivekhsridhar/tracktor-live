@@ -49,8 +49,8 @@ def colour_to_thresh(frame, block_size = 31, offset = 25, blur=True,
 
     if blur:
         frame = cv2.blur(frame, (5,5))
-    if block_size % 2 == 0:
-        block_size += 1
+        
+    block_size |= 1
 
     if invert:
         threshtype = cv2.THRESH_BINARY_INV
@@ -60,7 +60,7 @@ def colour_to_thresh(frame, block_size = 31, offset = 25, blur=True,
     thresh = cv2.adaptiveThreshold(gray,
                                     255,
                                     cv2.ADAPTIVE_THRESH_MEAN_C,
-                                    cv2.THRESH_BINARY_INV,
+                                    threshtype,
                                     block_size,
                                     offset
                                 )
