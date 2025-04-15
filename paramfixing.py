@@ -183,13 +183,16 @@ def main():
 
     # Create GUI sliders
     cv2.namedWindow('Threshold Parameters', cv2.WINDOW_NORMAL)
-    cv2.resizeWindow('Threshold Parameters', 600, 100)
+    cv2.resizeWindow('Threshold Parameters', 1000, 80)
+
     cv2.createTrackbar('Block size', 'Threshold Parameters', initial_block_size, args.block_size_max, lambda x: None)
     cv2.createTrackbar('Offset', 'Threshold Parameters', initial_offset, args.offset_max, lambda x: None)
     cv2.createTrackbar('Min blob size', 'Threshold Parameters', initial_min_blob_size, args.min_blob_size_max, lambda x: None)
     cv2.createTrackbar('Max blob size', 'Threshold Parameters', initial_max_blob_size, args.max_blob_size_max, lambda x: None)
     cv2.createTrackbar('Invert', 'Threshold Parameters', initial_invert, 1, lambda x: None)
-    cv2.createTrackbar('Seek', 'Threshold Parameters', 0, total_frames - 1, lambda x: None)
+
+    if args.file:
+        cv2.createTrackbar('Seek', 'Threshold Parameters', 0, total_frames - 1, lambda x: None)
 
     while True:
         if not is_paused:
