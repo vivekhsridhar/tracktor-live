@@ -1,17 +1,20 @@
 import os
 import re
 import argparse
-import warnings
-import numpy as np
-
-
 import json
 import cv2
+import numpy as np
 
 import tracktor as tr
 
 
 def parse_arguments():
+    """
+    Parses command-line arguments for video analysis and threshold tuning.
+    
+    Returns:
+        argparse.Namespace: Parsed arguments object.
+    """
     parser = argparse.ArgumentParser(description="Video analysis and threshold tuning.")
 
     parser.add_argument('-n', '--name', required=True, help='Name of the new video file after analysis')
@@ -38,15 +41,33 @@ def parse_arguments():
 
 
 def parse_resolution(res_string):
+    """
+    Parses a resolution string (e.g., "1920x1080") into width and height.
+    
+    Args:
+        res_string (str): Resolution in the form WIDTHxHEIGHT.
+    
+    Returns:
+        tuple: (width, height) as integers.
+    
+    Raises:
+        ValueError: If the resolution format is invalid.
+    """
     try:
         width = int(re.search(r'\d+', res_string).group())
         height = int(re.search(r'\d+$', res_string).group())
         return width, height
-    except:
+    except Exception:
         raise ValueError("Invalid resolution format. Use WIDTHxHEIGHT (e.g., 1920x1080).")
 
 
 def extract_first_frame_from_file(path):
+    """
+    Extracts and saves the first frame from a video file.
+    
+    Args:
+        path (str): Path to the video file.
+    """
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():
         raise IOError("Could not open video file.")
@@ -59,6 +80,12 @@ def extract_first_frame_from_file(path):
 
 
 def extract_first_frame_from_camera(device_index):
+    """
+    Captures a frame from a live camera feed and saves it.
+    
+    Args:
+        device_index (int): Index of the camera device.
+    """
     cap = cv2.VideoCapture(device_index)
     if not cap.isOpened():
         raise IOError("Cannot open camera.")
@@ -82,41 +109,64 @@ def extract_first_frame_from_camera(device_index):
 
 
 def process_image(image, block_size, offset, min_blob_size, max_blob_size, invert):
+    """
+    Processes an image using adaptive thresholding and contour detection.
+    
+    Args:
+        image (ndarray): Source image.
+        block_size (int): Adaptive threshold block size.
+        offset (int): Offset for thresholding.
+        min_blob_size (int): Minimum contour area to display.
+        max_blob_size (int): Maximum contour area to display.
+        invert (bool): Whether to invert thresholding.
+    """
     current_image = image.copy()
-    block_size = max(3, block_size | 1)  # Ensure it's odd
+    block_size = max(3, block_size | 1)  # Ensure block size is odd
 
+    # Generate binary mask
     thresh = tr.colour_to_thresh(current_image, block_size=block_size,
-                             offset=offset, blur=False, invert=bool(invert))
+                                 offset=offset, blur=False, invert=bool(invert))
 
+    # Find external contours
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     for contour in contours:
         area = cv2.contourArea(contour)
         if min_blob_size < area < max_blob_size:
-            cv2.drawContours(current_image, [contour], -1, (0, 0, 255), 1)
+            cv2.drawContours(current_image, [contour], -1, (0, 0, 255), 2)
             moments = cv2.moments(contour)
             if moments["m00"]:
                 cx = int(moments["m10"] / moments["m00"])
                 cy = int(moments["m01"] / moments["m00"])
                 cv2.putText(current_image, f'{int(area)}', (cx - 20, cy),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
     cv2.imshow('Threshold Image', current_image)
 
 
-def update_params_file(block_size, offset, min_blob_size, max_blob_size,
+def update_params_file(block_size, offset, min_blob_size, max_blob_size, invert, 
                        initial_block_size, initial_offset,
-                       initial_min_blob_size, initial_max_blob_size):
+                       initial_min_blob_size, initial_max_blob_size,
+                       initial_invert):
+    """
+    Updates the params.json file if any of the parameters have changed.
+    
+    Args:
+        block_size, offset, min_blob_size, max_blob_size, invert: Current values.
+        initial_*: Corresponding initial values.
+    """
     if (block_size != initial_block_size or
         offset != initial_offset or
         min_blob_size != initial_min_blob_size or
-        max_blob_size != initial_max_blob_size):
+        max_blob_size != initial_max_blob_size or
+        invert != initial_invert):
 
         config = {
             "block_size": block_size,
             "offset": offset,
             "min_area": min_blob_size,
-            "max_area": max_blob_size
+            "max_area": max_blob_size,
+            "invert": invert
         }
 
         with open("params.json", "w", encoding="utf-8") as f:
@@ -126,6 +176,9 @@ def update_params_file(block_size, offset, min_blob_size, max_blob_size,
 
 
 def main():
+    """
+    Main function to handle GUI threshold tuning and contour display.
+    """
     args = parse_arguments()
 
     if args.file and args.camera:
@@ -139,9 +192,7 @@ def main():
         print(e)
         return
 
-    fps = int(args.fps)
-
-    # Extract first frame
+    # Extract first frame from input source
     if args.file:
         extract_first_frame_from_file(args.file)
     else:
@@ -150,20 +201,22 @@ def main():
     image_path = os.path.join(os.getcwd(), 'first_frame.jpg')
     image = cv2.imread(image_path)
 
-    # Initialize parameters
+    # Initial parameter values
     initial_block_size = 51
     initial_offset = 0
     initial_min_blob_size = 500
     initial_max_blob_size = 5000
-    initial_invert = 0
+    initial_invert = 1
 
+    # Create GUI sliders
     cv2.namedWindow('Threshold Parameters')
     cv2.createTrackbar('Block size', 'Threshold Parameters', initial_block_size, args.block_size_max, lambda x: None)
     cv2.createTrackbar('Offset', 'Threshold Parameters', initial_offset, args.offset_max, lambda x: None)
     cv2.createTrackbar('Min blob size', 'Threshold Parameters', initial_min_blob_size, args.min_blob_size_max, lambda x: None)
     cv2.createTrackbar('Max blob size', 'Threshold Parameters', initial_max_blob_size, args.max_blob_size_max, lambda x: None)
-    cv2.createTrackbar('Invert', 'Threshold Parameters', 0, 1, lambda x: None)
+    cv2.createTrackbar('Invert', 'Threshold Parameters', initial_invert, 1, lambda x: None)
 
+    # Initial render
     process_image(image, initial_block_size, initial_offset,
                   initial_min_blob_size, initial_max_blob_size, initial_invert)
 
@@ -172,6 +225,7 @@ def main():
         if key in [27, ord('q')]:
             break
 
+        # Read GUI slider positions
         block_size = cv2.getTrackbarPos('Block size', 'Threshold Parameters')
         offset = cv2.getTrackbarPos('Offset', 'Threshold Parameters')
         min_blob_size = cv2.getTrackbarPos('Min blob size', 'Threshold Parameters')
@@ -182,10 +236,14 @@ def main():
 
     cv2.destroyAllWindows()
 
-    block_size = block_size | 1  # Ensure block size is odd
+    # Ensure odd block size before saving
+    block_size = block_size | 1
+
+    # Update config file if values changed
     update_params_file(block_size, offset, min_blob_size, max_blob_size,
                        initial_block_size, initial_offset,
-                       initial_min_blob_size, initial_max_blob_size)
+                       initial_min_blob_size, initial_max_blob_size,
+                       invert, initial_invert)
 
 
 if __name__ == "__main__":
