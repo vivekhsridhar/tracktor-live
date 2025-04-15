@@ -159,14 +159,14 @@ def main():
     if not args.file and not args.camera:
         raise SyntaxError("You must specify a video file (-f) or camera (-c).")
 
-    # Extract first frame from input source
+    # Initialize video capture from file or camera
     if args.file:
-        extract_first_frame_from_file(args.file)
+        cap = cv2.VideoCapture(args.file)
     else:
-        extract_first_frame_from_camera(int(args.camera))
+        cap = cv2.VideoCapture(int(args.camera))
 
-    image_path = os.path.join(os.getcwd(), 'first_frame.jpg')
-    image = cv2.imread(image_path)
+    if not cap.isOpened():
+        raise IOError("Failed to open video source.")
 
     # Initial parameter values
     initial_block_size = 51
@@ -174,33 +174,58 @@ def main():
     initial_min_blob_size = 500
     initial_max_blob_size = 5000
     initial_invert = 1
+    
+    is_paused = False
+    frame_index = 0
+
+    # Get total frames to set max for seek bar
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
     # Create GUI sliders
-    cv2.namedWindow('Threshold Parameters')
+    cv2.namedWindow('Threshold Parameters', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('Threshold Parameters', 600, 100)
     cv2.createTrackbar('Block size', 'Threshold Parameters', initial_block_size, args.block_size_max, lambda x: None)
     cv2.createTrackbar('Offset', 'Threshold Parameters', initial_offset, args.offset_max, lambda x: None)
     cv2.createTrackbar('Min blob size', 'Threshold Parameters', initial_min_blob_size, args.min_blob_size_max, lambda x: None)
     cv2.createTrackbar('Max blob size', 'Threshold Parameters', initial_max_blob_size, args.max_blob_size_max, lambda x: None)
     cv2.createTrackbar('Invert', 'Threshold Parameters', initial_invert, 1, lambda x: None)
-
-    # Initial render
-    process_image(image, initial_block_size, initial_offset,
-                  initial_min_blob_size, initial_max_blob_size, initial_invert)
+    cv2.createTrackbar('Seek', 'Threshold Parameters', 0, total_frames - 1, lambda x: None)
 
     while True:
-        key = cv2.waitKey(1) & 0xFF
-        if key in [27, ord('q')]:
-            break
+        if not is_paused:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            frame_index = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+            cv2.setTrackbarPos('Seek', 'Threshold Parameters', frame_index)
 
-        # Read GUI slider positions
+        else:
+            # If paused and user moves the trackbar, fetch frame at that index
+            seek_pos = cv2.getTrackbarPos('Seek', 'Threshold Parameters')
+            if seek_pos != frame_index:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, seek_pos)
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                frame_index = seek_pos
+
+        # Get parameter values
         block_size = cv2.getTrackbarPos('Block size', 'Threshold Parameters')
         offset = cv2.getTrackbarPos('Offset', 'Threshold Parameters')
         min_blob_size = cv2.getTrackbarPos('Min blob size', 'Threshold Parameters')
         max_blob_size = cv2.getTrackbarPos('Max blob size', 'Threshold Parameters')
         invert = cv2.getTrackbarPos('Invert', 'Threshold Parameters')
 
-        process_image(image, block_size, offset, min_blob_size, max_blob_size, invert)
+        process_image(frame, block_size, offset, min_blob_size, max_blob_size, invert)
 
+        key = cv2.waitKey(100) & 0xFF
+        if key in [27, ord('q')]:
+            break
+        elif key == ord(' '):  # Spacebar toggles play/pause
+            is_paused = not is_paused
+
+
+    cap.release()
     cv2.destroyAllWindows()
 
     # Ensure odd block size before saving
