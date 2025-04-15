@@ -67,7 +67,8 @@ def colour_to_thresh(frame, block_size = 31, offset = 25, blur=True,
     return thresh
 
 def detect_and_draw_contours(frame, thresh, meas_last,
-                                meas_now, min_area = 0, max_area = 10000):
+                                meas_now, min_area = 0, max_area=10000,
+                                draw=True):
     """
     This function detects contours, thresholds them based on area and draws
     them.
@@ -86,12 +87,14 @@ def detect_and_draw_contours(frame, thresh, meas_last,
         minimum area threhold used to detect the object of interest
     max_area: int
         maximum area threhold used to detect the object of interest
+    draw_contours: bool
+        whether to draw detected contours on frame
         
     Returns
     -------
     final: ndarray, shape(n_rows, n_cols, 3)
         final output image composed of the input frame with object contours 
-        and centroids overlaid on it
+        and centroids overlaid on it if specified
     contours: list
         a list of all detected contours that pass the area based threhold
         criterion
@@ -124,7 +127,8 @@ def detect_and_draw_contours(frame, thresh, meas_last,
         if area < min_area or area > max_area:
             contours = contours[:i] + contours[i+1:]
         else:
-            cv2.drawContours(final, contours, i, (0,0,255), 1)
+            if draw_contours:
+                cv2.drawContours(final, contours, i, (0,0,255), 1)
             mom = cv2.moments(contours[i])
             if mom['m00'] != 0:
                 cx = mom['m10']/mom['m00']
@@ -219,7 +223,9 @@ def hungarian_algorithm(meas_last, meas_now):
     row_ind, col_ind = linear_sum_assignment(cost)
     return row_ind, col_ind
 
-def reorder_and_draw(final, colours, n_inds, col_ind, meas_now, df, mot, fr_no):
+def reorder_and_draw(final, colours, n_inds,
+                        col_ind, meas_now,
+                        mot, fr_no, draw_circles=True):
     """
     This function reorders the measurements in the current frame to match
     identity from previous frame. This is done by using the results of the
@@ -240,11 +246,11 @@ def reorder_and_draw(final, colours, n_inds, col_ind, meas_now, df, mot, fr_no):
         ``meas_last`` to ``meas_now`` by minimising the cost function
     meas_now: array_like, dtype=float
         individual's location on current frame
-    df: pandas.core.frame.DataFrame
-        this dataframe holds tracked coordinates i.e. the tracking results
     mot: bool
         this boolean determines if we apply the alogrithm to a multi-object
         tracking problem
+    draw_circles: bool
+        whether anything should be drawn onto frames
         
     Returns
     -------
@@ -268,13 +274,7 @@ def reorder_and_draw(final, colours, n_inds, col_ind, meas_now, df, mot, fr_no):
     # Draw centroids
     if not mot:
         for i in range(len(meas_now)):
-            if colours[i%4] == (0,0,255):
-               # cv2.circle(final, tuple([int(x) for x in meas_now[i]]),
-               #                                             5,
-               #                                             colours[i%4],
-               #                                             -1,
-               #                                             cv2.LINE_AA
-               #                                         )
+            if colours[i%4] == (0,0,255) and draw_circles:
                 cv2.circle(final, tuple((int(x) for x in meas_now[i])),
                                                             5,
                                                             colours[i%4],
@@ -283,18 +283,20 @@ def reorder_and_draw(final, colours, n_inds, col_ind, meas_now, df, mot, fr_no):
                                                         )
     else:
         for i in range(n_inds):
-            cv2.circle(final, tuple((int(x) for x in meas_now[i])),
-                                            5,
-                                            colours[i%n_inds],
-                                            -1,
-                                            cv2.LINE_AA
-                                        )
+            if draw_circles:
+                cv2.circle(final, tuple((int(x) for x in meas_now[i])),
+                                                5,
+                                                colours[i%n_inds],
+                                                -1,
+                                                cv2.LINE_AA
+                                            )
 
     # add frame number
     font = cv2.FONT_HERSHEY_SCRIPT_SIMPLEX
-    cv2.putText(final, str(int(fr_no)), (5,30), font, 1, (255,255,255), 2)
+    if draw_circles:
+        cv2.putText(final, str(int(fr_no)), (5,30), font, 1, (255,255,255), 2)
 
-    return final, meas_now, df
+    return final, meas_now
 
 def reject_outliers(data, m):
     """
