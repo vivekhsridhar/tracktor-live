@@ -21,12 +21,6 @@ def parse_arguments():
     parser.add_argument('-c', '--camera', help='Camera device number')
     parser.add_argument('-f', '--file', help='Complete file path')
 
-    # Video parameters
-    parser.add_argument('-res', '--resolution', default="1920x1080",
-                        help='Resolution (e.g. 1920x1080). Needed for accurate plotting.')
-    parser.add_argument('-fps', '--fps', default=30, type=int,
-                        help='Frames per second (default: 30)')
-
     # Trackbar range settings
     parser.add_argument('--block-size-max', type=int, default=151,
                         help='Maximum block size (must be odd)')
@@ -38,27 +32,6 @@ def parse_arguments():
                         help='Maximum value for max blob size trackbar')
 
     return parser.parse_args()
-
-
-def parse_resolution(res_string):
-    """
-    Parses a resolution string (e.g., "1920x1080") into width and height.
-    
-    Args:
-        res_string (str): Resolution in the form WIDTHxHEIGHT.
-    
-    Returns:
-        tuple: (width, height) as integers.
-    
-    Raises:
-        ValueError: If the resolution format is invalid.
-    """
-    try:
-        width = int(re.search(r'\d+', res_string).group())
-        height = int(re.search(r'\d+$', res_string).group())
-        return width, height
-    except Exception:
-        raise ValueError("Invalid resolution format. Use WIDTHxHEIGHT (e.g., 1920x1080).")
 
 
 def extract_first_frame_from_file(path):
@@ -185,12 +158,6 @@ def main():
         raise SyntaxError("Specify either a video file or camera, not both.")
     if not args.file and not args.camera:
         raise SyntaxError("You must specify a video file (-f) or camera (-c).")
-
-    try:
-        xmax, ymax = parse_resolution(args.resolution)
-    except ValueError as e:
-        print(e)
-        return
 
     # Extract first frame from input source
     if args.file:
