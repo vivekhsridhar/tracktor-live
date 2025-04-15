@@ -6,9 +6,13 @@
 suite of helper functions to aid in tracking objects in video
 """
 
+import os.path
+from os.path import join as joinpath
+
 import cv2
 import numpy as np
 
+import config
 import tracktor as tr
 
 def get_vid(source, vidtype="cam"):
@@ -74,6 +78,7 @@ def get_contours(frame, block_size,
     return final, contours, meas_last, meas_now
     
 
+colours = [(255,255,255)]*10
 def cleanup_centroids(final, contours, n_inds,
                         meas_last, meas_now,
                         mot, frame_index,
@@ -113,3 +118,52 @@ def make_numpy_frame(meas_now, n_ind):
 
 if __name__ == "__main__":
     print("Running toy tracker using these functions.")
+    vidfile = joinpath(config.DATA, "vids", "fish_video.mp4")
+    cap = get_vid(vidfile, vidtype="file")
+    fourcc = cv2.VideoWriter_fourcc(*'DIVX')
+    output_framesize = (int(cap.read()[1].shape[1]*1.0),
+                            int(cap.read()[1].shape[0]*1.0))
+    out = cv2.VideoWriter(filename = joinpath(config.DATA, "trial.mp4"),
+                            fourcc = fourcc,
+                            fps = 30.0,
+                            frameSize = output_framesize,
+                            isColor = True
+                        )
+
+
+    while True:
+        try:
+            frame, frame_index = get_frame(cap)
+        except EOFError:
+            print("File completed")
+            quit()
+
+        meas_last = [[0, 0]]
+        meas_now = [[0, 0]]
+
+        final, contours, meas_last, meas_now = get_contours(
+                                frame,
+                                meas_last=meas_last,
+                                meas_now=meas_now,
+                                min_area=1000,
+                                max_area=10000,
+                                block_size=81,
+                                offset=38,
+                                scaling=1.0,
+                                draw_contours=True
+                            )
+
+        final, meas_now = cleanup_centroids(
+                            final=final,
+                            contours=contours,
+                            n_inds=1,
+                            meas_last=meas_last,
+                            meas_now=meas_now,
+                            mot=True,
+                            frame_index=frame_index,
+                            draw_circles=True,
+                            use_kmeans = True
+                        )
+
+        out.write(final)
+    out.release()

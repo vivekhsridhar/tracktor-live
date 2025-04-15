@@ -68,7 +68,7 @@ def colour_to_thresh(frame, block_size = 31, offset = 25, blur=True,
 
 def detect_and_draw_contours(frame, thresh, meas_last,
                                 meas_now, min_area = 0, max_area=10000,
-                                draw=True):
+                                draw_contours=True):
     """
     This function detects contours, thresholds them based on area and draws
     them.

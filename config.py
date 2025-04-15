@@ -8,7 +8,7 @@ import os.path
 
 
 #Directories
-PROJECTROOT = open(.cw, r).read().rstrip()
+PROJECTROOT = open(".cw", "r").read().rstrip()
 DATA = os.path.join(PROJECTROOT, "Data")
 FIGURES = os.path.join(PROJECTROOT, "Figures")
 
