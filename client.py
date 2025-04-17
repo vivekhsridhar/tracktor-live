@@ -22,21 +22,21 @@ class SyncManager(BaseManager): pass
 
 class TracktorClient:
 
-    def __init__(self, shmname, configdict, addr='127.0.0.1', port=50000, run_interval=None):
+    def __init__(self, shmname, configdict, addr='127.0.0.1', port_num=50000, run_interval=None):
         """
         initialises a TracktorClient object.
         Args:
             shmname (shared_memory address, see docs): address to last k seconds of data
             configdict: (mp.Manager.dict): configuration dictionary of server
-            addr (str) and port (int): address specs of the BaseManager for semaphore locks
+            addr (str) and port_num (int): address specs of the BaseManager for semaphore locks
             run_interval (float): how often attached functions must run. if absent, defaults to 2*FPS
         """
 
         SyncManager.register('get_semaphore')
 
-        manager = SyncManager(address=('127.0.0.1', 50000), authkey=b'secret')
-        manager.connect()
-        self.sem = manager.get_semaphore()
+        self.manager = SyncManager(address=('127.0.0.1', port_num), authkey=b'secret')
+        self.manager.connect()
+        self.sem = self.manager.get_semaphore()
 
         self.shmname = shmname
         self.config = configdict
@@ -80,6 +80,7 @@ class TracktorClient:
         (default: 2*FPS)
         """
         self.clientproc = mp.Process(target=runforever, args=(self,))
+        self.clientproc.start()
 
     def stop(self):
         """
