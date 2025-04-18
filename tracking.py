@@ -19,17 +19,10 @@ import uuid
 
 import cv2
 import numpy as np
-import platformdirs as pfd
 
+import config
 import memorymanagement as mmg
 
-APP_NAME = "tracktorlive"
-APP_AUTHOR = "DIPV"# Dom, Isaac, Pranav, Vivek
-FEEDS_DIR = joinpath(
-                pfd.user_data_dir(appname=APP_NAME, appauthor=APP_AUTHOR),
-                "LiveFeeds"
-                )
-os.makedirs(FEEDS_DIR, exist_ok=True)
 
 def _runforever(server):
     t_init = time.time()
@@ -128,7 +121,7 @@ class TracktorServer:
 # then set up everything needed for tracking
 
     def get_feed_filename(self):
-        return joinpath(FEEDS_DIR, f"tlfeed-{self.feed_id}")
+        return joinpath(config.FEEDS_DIR, f"tlfeed-{self.feed_id}")
 
 
     def create_feed_file(self):
@@ -192,7 +185,7 @@ class TracktorServer:
 #    def __repr__
 #    def __call__#??
     def _eachframe(self, databuffer, clockbuffer):#tracking happens here
-        time.sleep(0.02)
+#        time.sleep(0.02)
         self.semaphore.acquire()
         databuffer[:,:,:-1] = databuffer[:,:,1:]
         clockbuffer[:-1] = clockbuffer[1:]
@@ -220,6 +213,7 @@ class TracktorServer:
         self.clockshm.close()
         self.datashm.unlink()
         self.clockshm.unlink()
+        os.remove(self.get_feed_filename())
 
 
 
@@ -245,9 +239,9 @@ if __name__ == "__main__":
     server.run()
 
     tnow = time.time()
-    while time.time() - tnow < 10.0:
+    while time.time() - tnow < 5.0:
         print(server.get_data()[:,:,-1], end="\033[K\r")
-        time.sleep(0.01)
+#        time.sleep(0.01)
 
     server.stop()
     del server
