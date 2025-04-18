@@ -27,7 +27,7 @@ import memorymanagement as mmg
 def _runforever(server):
     t_init = time.time()
     databuffer, clockbuffer = server.setup_shared_arrays()
-    while server.running.value:
+    while server.running.value and not server.timed_out():
         server._eachframe(databuffer, clockbuffer)
 
 class SyncManager(BaseManager): pass
@@ -69,7 +69,8 @@ class TracktorServer:
                     recfile=None,
                     datfile=None,
                     addr='127.0.0.1',
-                    port_num=port_num
+                    port_num=port_num,
+                    timeout=None
                 ):
         """
         bla bla bla
@@ -90,6 +91,10 @@ class TracktorServer:
         self.datfile = datfile
         self.addr = addr
         self.port_num = port_num
+        if timeout is None:
+            self.timeout = np.inf
+        else:
+            self.timeout = timeout
 
         wait_for_server((addr, port_num))
         self.manager = SyncManager(address=(addr, port_num), authkey=b'secret')
@@ -131,8 +136,8 @@ class TracktorServer:
             "buffer_size":  self.buffer_size,
             "n_ind":        self.n_ind,
             "datashm":      self.datashm.name,
-            "clockshm":     self.clockshm,
-            "port_nr":      self.port_num,
+            "clockshm":     self.clockshm.name,
+            "port_num":      self.port_num,
             "vid_source":   self.vid_source,
             "t_init":       self.t_init,
             "params":       self.params
@@ -200,11 +205,19 @@ class TracktorServer:
         self.serverproc = mp.Process(target=_runforever, args=(self,))
         self.serverproc.start()
 
+    def timed_out(self):
+        return time.time() - self.t_init > self.timeout
+
     def stop(self):
         self.running.value = False
         #self.serverproc.terminate()
         self.serverproc.join()
         self.serverproc.close()
+        self.databuffer[:,:,1:] = self.databuffer[:,:,:-1]
+        self.clockbuffer[1:] = self.clockbuffer[:-1]
+
+        self.databuffer[:,:,-1] = -1.0
+        self.clockbuffer[-1] = -1.0
 
     def __del__(self):
         if self.running.value:
@@ -227,24 +240,30 @@ if __name__ == "__main__":
                     n_ind=1,
                     buffer_size=10,#seconds
                     realtime=True,
-                    feed_id=None,
+                    feed_id="trial",
                     keep_recordings=False,
                     keep_video=False,
                     write_recordings=False,
                     write_video=False,
                     recfile=None,
                     datfile=None,
-                    addr='127.0.0.1'
+                    addr='127.0.0.1',
+                    timeout=20.0
                 )
-    server.run()
+    try:
+        server.run()
 
-    tnow = time.time()
-    while time.time() - tnow < 5.0:
-        print(server.get_data()[:,:,-1], end="\033[K\r")
+        tnow = time.time()
+        while time.time() - tnow < 5.0:
+            print(server.get_data()[:,:,-1], end="\033[K\r")
 #        time.sleep(0.01)
-
-    server.stop()
-    del server
-    semmanager.terminate()
-    semmanager.join()
-    semmanager.close()
+    except KeyboardInterrupt:
+        print("Stopping everything now")
+    finally:
+        while not server.timed_out():
+            time.sleep(0.2)
+        server.stop()
+        del server
+        semmanager.terminate()
+        semmanager.join()
+        semmanager.close()

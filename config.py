@@ -5,6 +5,9 @@
 
 import os
 import os.path
+from os.path import join as joinpath
+
+import platformdirs as pfd
 
 
 #Directories
@@ -14,5 +17,12 @@ FIGURES = os.path.join(PROJECTROOT, "Figures")
 
 formats=['png', 'pdf', 'svg']
 
+APP_NAME = "tracktorlive"
+APP_AUTHOR = "DIPV"# Dom, Isaac, Pranav, Vivek
+FEEDS_DIR = joinpath(
+                pfd.user_data_dir(appname=APP_NAME, appauthor=APP_AUTHOR),
+                "LiveFeeds"
+                )
+os.makedirs(FEEDS_DIR, exist_ok=True)
 #Miscellaneous
 SUPPRESS_INFORMATIVE_PRINT = False
