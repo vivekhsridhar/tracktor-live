@@ -6,6 +6,7 @@
 provides class TracktorServer, for underlying tracking and dataserving needs
 """
 
+import glob
 import multiprocessing as mp
 import multiprocessing.shared_memory as mpshm
 from multiprocessing.managers import BaseManager
@@ -28,7 +29,10 @@ def _runforever(server):
     t_init = time.time()
     databuffer, clockbuffer = server.setup_shared_arrays()
     while server.running.value and not server.timed_out():
-        server._eachframe(databuffer, clockbuffer)
+        try:
+            server._eachframe(databuffer, clockbuffer)
+        except KeyboardInterrupt:
+            break
 
 class SyncManager(BaseManager): pass
 
@@ -40,7 +44,11 @@ port_num = random.choice(range(12000, 20000))
 def run_semaphore_server():
     manager = SyncManager(address=('127.0.0.1', port_num), authkey=b'secret')
     s = manager.get_server()
-    s.serve_forever()
+    try:
+        s.serve_forever()
+    except KeyboardInterrupt:
+        s.stop()
+
 
 def wait_for_server(address, timeout=5.0):
     host, port = address
@@ -111,6 +119,8 @@ class TracktorServer:
 
 
         self.datashm, self.clockshm = self.setup_shared_mems()
+#        mp.resource_tracker.unregister(self.datashm._name, 'shared_memory')
+#        mp.resource_tracker.unregister(self.clockshm._name, 'shared_memory')
         self.databuffer, self.clockbuffer = self.setup_shared_arrays()
 
         self.framesbuffer = [np.nan for i in range(int(self.fps * self.buffer_size))]
@@ -119,7 +129,6 @@ class TracktorServer:
             self.vid_source = "file"
 
 
-        self.t_init = time.time()
         self.create_feed_file()
         
 # first create a feedobj file
@@ -139,7 +148,6 @@ class TracktorServer:
             "clockshm":     self.clockshm.name,
             "port_num":      self.port_num,
             "vid_source":   self.vid_source,
-            "t_init":       self.t_init,
             "params":       self.params
             }
         feedfile = self.get_feed_filename()
@@ -181,12 +189,20 @@ class TracktorServer:
         self.semaphore.release()
 
         return data
+
     def get_times(self):
         self.semaphore.acquire()
         times = self.clockbuffer.copy()
         self.semaphore.release()
 
         return times
+
+    def get_clients(self):
+        return glob.glob(
+                joinpath(config.CLIENTS_DIR,
+                            f"tlclient-{self.feed_id}-*"
+                        )
+                )
 #    def __repr__
 #    def __call__#??
     def _eachframe(self, databuffer, clockbuffer):#tracking happens here
@@ -195,12 +211,13 @@ class TracktorServer:
         databuffer[:,:,:-1] = databuffer[:,:,1:]
         clockbuffer[:-1] = clockbuffer[1:]
 
-        clockbuffer[-1] = time.time()
+        clockbuffer[-1] = time.time() - self.t_init
         databuffer[:,:,-1] = np.random.random((self.n_ind, 2))
         self.semaphore.release()
 #    def dumpvideo(self, outfile=None)
 #    def dumpdata(self, outfile=None)
     def run(self):
+        self.t_init = time.time()
         self.running = mp.Value('b', True)
         self.serverproc = mp.Process(target=_runforever, args=(self,))
         self.serverproc.start()
@@ -221,11 +238,24 @@ class TracktorServer:
 
     def __del__(self):
         if self.running.value:
+            print("del called stop")
             self.stop()
+            time.sleep(0.001)
         self.datashm.close()
         self.clockshm.close()
-        self.datashm.unlink()
-        self.clockshm.unlink()
+
+        t_close = time.time()
+        while len(self.get_clients()) > 0 and time.time() - t_close < 5.0:
+            time.sleep(0.01)
+            pass
+        try:
+            self.datashm.unlink()
+            self.clockshm.unlink()
+        except FileNotFoundError:
+            pass
+        except KeyError as e:
+            print("An inexplicable, commonly occuring error occured upon server closure. ERR001")
+
         os.remove(self.get_feed_filename())
 
 
@@ -248,7 +278,7 @@ if __name__ == "__main__":
                     recfile=None,
                     datfile=None,
                     addr='127.0.0.1',
-                    timeout=20.0
+                    timeout=None
                 )
     try:
         server.run()
@@ -256,12 +286,12 @@ if __name__ == "__main__":
         tnow = time.time()
         while time.time() - tnow < 5.0:
             print(server.get_data()[:,:,-1], end="\033[K\r")
+        while not server.timed_out():
+            time.sleep(0.2)
 #        time.sleep(0.01)
     except KeyboardInterrupt:
         print("Stopping everything now")
     finally:
-        while not server.timed_out():
-            time.sleep(0.2)
         server.stop()
         del server
         semmanager.terminate()

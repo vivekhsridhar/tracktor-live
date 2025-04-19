@@ -11,9 +11,12 @@ import glob
 import multiprocessing as mp
 import multiprocessing.shared_memory as mpshm
 from multiprocessing.managers import BaseManager
+import os
+import os.path
 from os.path import join as joinpath
 import pickle
 import time
+import uuid
 
 import numpy as np
 
@@ -21,8 +24,12 @@ import config
 
 def runforever(obj):
     while obj.running.value:
-        time.sleep(0.5*obj.run_interval)
-        obj._eachiter()
+        try:
+            time.sleep(0.5*obj.run_interval)
+            obj._eachiter()
+        except KeyboardInterrupt:
+            obj.running.value=False
+            break
 
 class SyncManager(BaseManager): pass
 
@@ -43,6 +50,12 @@ class TracktorClient:
         self.feed_info = self.load_feed_info()
         self.port_num = self.feed_info["port_num"]
 
+        self.client_id = str(uuid.uuid4())
+        self.clientfile = self.get_client_filename()
+        print(self.clientfile)
+        self.make_client_file()
+        print(self.clientfile)
+
         self.manager = SyncManager(address=('127.0.0.1', self.port_num),
                                         authkey=b'secret')
         self.manager.connect()
@@ -50,6 +63,8 @@ class TracktorClient:
 
         self.datashm = mpshm.SharedMemory(name=self.feed_info["datashm"])
         self.clockshm = mpshm.SharedMemory(name=self.feed_info["clockshm"])
+        mp.resource_tracker.unregister(self.datashm._name, 'shared_memory')
+        mp.resource_tracker.unregister(self.clockshm._name, 'shared_memory')
         self.params = self.feed_info["params"]
 
         self.fps = int(self.feed_info["fps"])
@@ -88,6 +103,13 @@ class TracktorClient:
 
     def get_feed_filename(self):
         return joinpath(config.FEEDS_DIR, f"tlfeed-{self.feed_id}")
+
+    def get_client_filename(self):
+        return joinpath(config.CLIENTS_DIR, f"tlclient-{self.feed_id}-{self.client_id}")
+
+    def make_client_file(self):
+        with open(self.clientfile, "a") as f:
+            pass
 
     def load_feed_info(self):
         with open(self.get_feed_filename(), "rb") as f:
@@ -128,16 +150,18 @@ class TracktorClient:
         Stops running attached functions
         """
         self.running.value = False
+        os.remove(self.clientfile)
         #self.clientproc.terminate()
         self.clientproc.join()
         self.clientproc.close()
         
-    def __del__(self, f):
+    def __del__(self):
         if self.running.value:
             self.stop()
-        if os.path.exists(self.get_feed_filename()):
-            self.datashm.close()
-            self.clockshm.close()
+        self.datashm.close()
+        self.clockshm.close()
+        if os.path.exists(self.clientfile):
+            os.remove(self.clientfile)
 
 def list_feeds():
     return glob.glob(joinpath(config.FEEDS_DIR, "tlfeed-*"))
