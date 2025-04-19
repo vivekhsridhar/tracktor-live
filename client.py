@@ -94,11 +94,12 @@ class TracktorClient:
                     buffer = self.clockshm.buf
                 )
 
-        self.tgtfuncs = {}
+        self.casettes = {}
         self.clientproc = None
 
     def __call__(self, f):
-        self.tgtfuncs[f.__name__] = f
+        assert callable(f), "decorate only functions."
+        self.casettes[f.__name__] = f
         return f
 
     def get_feed_filename(self):
@@ -133,8 +134,8 @@ class TracktorClient:
         if clock[-1] > -1.0-1e-8 and clock[-1] < -1.0 + 1e-8:#FIXME
             self.running.value = False
         else:
-            for funcname in self.tgtfuncs:
-                self.tgtfuncs[funcname](data)
+            for funcname in self.casettes:
+                self.casettes[funcname](data)
 
     def run(self):
         """

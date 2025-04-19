@@ -105,6 +105,7 @@ class TracktorServer:
             self.timeout = timeout
 
         wait_for_server((addr, port_num))
+        self.resmanager = mp.Manager()
         self.manager = SyncManager(address=(addr, port_num), authkey=b'secret')
         self.manager.connect()
 
@@ -124,12 +125,14 @@ class TracktorServer:
         self.databuffer, self.clockbuffer = self.setup_shared_arrays()
 
         self.framesbuffer = [np.nan for i in range(int(self.fps * self.buffer_size))]
+        self.framesbuffer = self.resmanager.list(self.framesbuffer)
         self.vid_source = "cam"
         if not realtime:
             self.vid_source = "file"
 
 
         self.create_feed_file()
+        self.casettes = {}
         
 # first create a feedobj file
 # then set up everything needed for tracking
@@ -203,8 +206,18 @@ class TracktorServer:
                             f"tlclient-{self.feed_id}-*"
                         )
                 )
-#    def __repr__
-#    def __call__#??
+
+    def __str__(self):
+        return f"{self.__class__.__name__} object feed_id:{self.feed_id}"
+
+    def __repr__(self):
+        return f"{self.__class__.__name__} object feed_id:{self.feed_id}"
+
+    def __call__(self, f):
+        assert callable(f), f"decorate only functions."
+        self.casettes[f.__name__] = f
+        return f
+
     def _eachframe(self, databuffer, clockbuffer):#tracking happens here
 #        time.sleep(0.02)
         self.semaphore.acquire()
