@@ -7,6 +7,7 @@ provides class TracktorServer, for underlying tracking and dataserving needs
 """
 
 import glob
+import json
 import multiprocessing as mp
 import multiprocessing.shared_memory as mpshm
 from multiprocessing.managers import BaseManager
@@ -23,17 +24,21 @@ import numpy as np
 
 import config
 import memorymanagement as mmg
+import paramfixing
+import trackutils
 
 
 def _runforever(server):
     t_init = time.time()
     databuffer, clockbuffer = server.setup_shared_arrays()
     while server.running.value and not server.timed_out():
+        print("exec one _runforever")
         try:
             server._eachframe(databuffer, clockbuffer)
         except KeyboardInterrupt:
             server.running.value = False
             break
+    #server.stop()#???
 
 class SyncManager(BaseManager): pass
 
@@ -79,7 +84,8 @@ class TracktorServer:
                     datfile=None,
                     addr='127.0.0.1',
                     port_num=port_num,
-                    timeout=None
+                    timeout=None,
+                    draw=False
                 ):
         """
         bla bla bla
@@ -90,6 +96,7 @@ class TracktorServer:
         else:
             self.feed_id = feed_id
         self.buffer_size = buffer_size
+        self.cap = cap
         self.params = params
         self.n_ind = n_ind
         self.keep_recordings = keep_recordings
@@ -104,6 +111,7 @@ class TracktorServer:
             self.timeout = np.inf
         else:
             self.timeout = timeout
+        self.draw = draw
 
         wait_for_server((addr, port_num))
         self.resmanager = mp.Manager()
@@ -115,14 +123,12 @@ class TracktorServer:
         self.serverproc = None
 
         if not "fps" in params:
-            self.fps = cap.get(cv2.CAP_PROP_FPS)
+            self.fps = self.cap.get(cv2.CAP_PROP_FPS)
         else:
             self.fps = params["fps"]
 
 
         self.datashm, self.clockshm = self.setup_shared_mems()
-#        mp.resource_tracker.unregister(self.datashm._name, 'shared_memory')
-#        mp.resource_tracker.unregister(self.clockshm._name, 'shared_memory')
         self.databuffer, self.clockbuffer = self.setup_shared_arrays()
 
         self.framesbuffer = [np.nan for i in range(int(self.fps * self.buffer_size))]
@@ -134,12 +140,32 @@ class TracktorServer:
 
         self.create_feed_file()
         self.casettes = {}
-        
-# first create a feedobj file
-# then set up everything needed for tracking
 
+        self.meas_last = [[0, 0] for j in range(self.n_ind)]
+        self.meas_now = [[0, 0] for j in range(self.n_ind)]
+        self.meas_last = self.resmanager.list(self.meas_last)
+        self.meas_now = self.resmanager.list(self.meas_now)
+        
     def get_feed_filename(self):
         return joinpath(config.FEEDS_DIR, f"tlfeed-{self.feed_id}")
+
+
+    def tune_params(self, source="gui"):
+        if source == "gui":
+            if self.vid_source=="file":
+                frame_index = cv2.get(CAP_PROP_POS_FRAMES)
+                self.cap.set(cv2.CAP_PROP_POS_FRAMES, 1)
+            self.params = paramfixing.gui_set_params(cap=self.cap,
+                                                vidtype=self.vid_source)
+            if self.vid_source=="file":
+                self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+
+        elif os.path.exists(source):
+            with open(source, "e") as params_json:
+                self.params = json.load(params_json)
+
+        else:
+            raise ValueError("tune_params argument must be 'gui' or a json filepath.")
 
 
     def create_feed_file(self):
@@ -154,6 +180,7 @@ class TracktorServer:
             "vid_source":   self.vid_source,
             "params":       self.params
             }
+
         feedfile = self.get_feed_filename()
         with open(feedfile, "wb") as feedfile:
             pickle.dump(feeddata, feedfile)
@@ -220,13 +247,47 @@ class TracktorServer:
         return f
 
     def _eachframe(self, databuffer, clockbuffer):#tracking happens here
-#        time.sleep(0.02)
+
+        try:
+            frame, frame_index = trackutils.get_frame(self.cap)
+        except EOFError:
+            if self.vid_source == "file":
+                # file completed
+                self.running.value = False
+            else:
+                pass
+
+        print(self.meas_last, self.meas_now)
+        final, contours,\
+            self.meas_last, self.meas_now = trackutils.get_contours(
+                                            frame=frame,
+                                            meas_last=self.meas_last,
+                                            meas_now=self.meas_now,
+                                            scaling=1.0,#FIXME
+                                            draw_contours=self.draw,
+                                            **self.params#FIXME:issue in `invert` from paramfixing
+                                        )
+        print(self.meas_last, self.meas_now)
+# FIXME: Hungarian algorithm causes everything to crash whenever no objects detected
+        final, self.meas_now = trackutils.cleanup_centroids(
+                                    final,
+                                    contours,
+                                    n_inds=self.n_ind,
+                                    meas_last=self.meas_last,
+                                    meas_now=self.meas_now,
+                                    mot=True,#FIXME
+                                    frame_index=frame_index,
+                                    draw_circles=self.draw,
+                                    use_kmeans=True#FIXME
+                                )
+
+
         self.semaphore.acquire()
         databuffer[:,:,:-1] = databuffer[:,:,1:]
         clockbuffer[:-1] = clockbuffer[1:]
 
         clockbuffer[-1] = time.time() - self.t_init
-        databuffer[:,:,-1] = np.random.random((self.n_ind, 2))
+        databuffer[:,:,-1] = self.meas_now[:self.n_ind]#???
         self.semaphore.release()
 
 #    def dumpvideo(self, outfile=None)
@@ -254,7 +315,6 @@ class TracktorServer:
 
     def __del__(self):
         if self.running.value:
-            print("del called stop")
             self.stop()
             time.sleep(0.001)
         self.datashm.close()
@@ -277,15 +337,16 @@ class TracktorServer:
 
 
 if __name__ == "__main__":
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture("/home/pranav/Personal/Projects/temp/tracktorlive/Data/vids/fish_video.mp4")
+#    cap = cv2.VideoCapture(0)
     semmanager = mp.Process(target=run_semaphore_server)
     semmanager.start()
     server = TracktorServer(
                     cap=cap,
-                    params={"fps": 30},
+                    params={},
                     n_ind=1,
                     buffer_size=10,#seconds
-                    realtime=True,
+                    realtime=False,
                     feed_id="trial",
                     keep_recordings=False,
                     keep_video=False,
@@ -296,12 +357,11 @@ if __name__ == "__main__":
                     addr='127.0.0.1',
                     timeout=None
                 )
+    server.tune_params()
     try:
         server.run()
 
         tnow = time.time()
-        while time.time() - tnow < 5.0 and server.running.value:
-            print(server.get_data()[:,:,-1], end="\033[K\r")
         while not server.timed_out() and server.running.value:
             time.sleep(0.2)
 #        time.sleep(0.01)

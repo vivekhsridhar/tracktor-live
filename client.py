@@ -138,6 +138,7 @@ class TracktorClient:
                 for funcname in self.casettes:
                     self.casettes[funcname](data)
         except EOFError:#server process died
+            print("Server died unexpectedly.")
             self.running.value = False
 
     def run(self):

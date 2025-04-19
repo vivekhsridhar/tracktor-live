@@ -120,7 +120,7 @@ def process_image(image, block_size, offset, min_blob_size, max_blob_size, inver
 def update_params_file(block_size, offset, min_blob_size, max_blob_size, invert, 
                        initial_block_size, initial_offset,
                        initial_min_blob_size, initial_max_blob_size,
-                       initial_invert):
+                       initial_invert, write_file=False):
     """
     Updates the params.json file if any of the parameters have changed.
     
@@ -142,29 +142,24 @@ def update_params_file(block_size, offset, min_blob_size, max_blob_size, invert,
             "invert": invert
         }
 
-        with open("params.json", "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=4)
+        if write_file:
+            with open("params.json", "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=4)
 
-        print("Parameters updated in params.json")
+            print("Parameters updated in params.json")
+        return config
 
 
-def main():
+def gui_set_params(cap,
+                    vidtype,
+                    block_size_max=151,
+                    offset_max=100,
+                    min_blob_size_max=5000,
+                    max_blob_size_max=50000,
+                    write_file=False):
     """
     Main function to handle GUI threshold tuning and contour display.
     """
-    args = parse_arguments()
-
-    if args.file and args.camera:
-        raise SyntaxError("Specify either a video file or camera, not both.")
-    if not args.file and not args.camera:
-        raise SyntaxError("You must specify a video file (-f) or camera (-c).")
-
-    # Initialize video capture from file or camera
-    if args.file:
-        cap = cv2.VideoCapture(args.file)
-    else:
-        cap = cv2.VideoCapture(int(args.camera))
-
     if not cap.isOpened():
         raise IOError("Failed to open video source.")
 
@@ -185,13 +180,13 @@ def main():
     cv2.namedWindow('Threshold Parameters', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('Threshold Parameters', 1000, 80)
 
-    cv2.createTrackbar('Block size', 'Threshold Parameters', initial_block_size, args.block_size_max, lambda x: None)
-    cv2.createTrackbar('Offset', 'Threshold Parameters', initial_offset, args.offset_max, lambda x: None)
-    cv2.createTrackbar('Min blob size', 'Threshold Parameters', initial_min_blob_size, args.min_blob_size_max, lambda x: None)
-    cv2.createTrackbar('Max blob size', 'Threshold Parameters', initial_max_blob_size, args.max_blob_size_max, lambda x: None)
+    cv2.createTrackbar('Block size', 'Threshold Parameters', initial_block_size, block_size_max, lambda x: None)
+    cv2.createTrackbar('Offset', 'Threshold Parameters', initial_offset, offset_max, lambda x: None)
+    cv2.createTrackbar('Min blob size', 'Threshold Parameters', initial_min_blob_size, min_blob_size_max, lambda x: None)
+    cv2.createTrackbar('Max blob size', 'Threshold Parameters', initial_max_blob_size, max_blob_size_max, lambda x: None)
     cv2.createTrackbar('Invert', 'Threshold Parameters', initial_invert, 1, lambda x: None)
 
-    if args.file:
+    if vidtype=="file":
         cv2.createTrackbar('Seek', 'Threshold Parameters', 0, total_frames - 1, lambda x: None)
 
     while True:
@@ -227,19 +222,47 @@ def main():
         elif key == ord(' '):  # Spacebar toggles play/pause
             is_paused = not is_paused
 
-
-    cap.release()
     cv2.destroyAllWindows()
 
     # Ensure odd block size before saving
     block_size = block_size | 1
 
     # Update config file if values changed
-    update_params_file(block_size, offset, min_blob_size, max_blob_size,
+    configdict = update_params_file(block_size, offset, min_blob_size, max_blob_size,
                        initial_block_size, initial_offset,
                        initial_min_blob_size, initial_max_blob_size,
-                       invert, initial_invert)
+                       invert, initial_invert, write_file=write_file)
 
+    return configdict
+
+
+def main():
+    args = parse_arguments()
+
+    if args.file and args.camera:
+        raise SyntaxError("Specify either a video file or camera, not both.")
+    if not args.file and not args.camera:
+        raise SyntaxError("You must specify a video file (-f) or camera (-c).")
+
+    # Initialize video capture from file or camera
+    if args.file:
+        cap = cv2.VideoCapture(args.file)
+    else:
+        cap = cv2.VideoCapture(int(args.camera))
+
+    vidtype = "cam"
+    if args.file:
+        vidtype = "file"
+    configdict = gui_set_params(cap=cap,
+                    vidtype=vidtype,
+                    block_size_max=args.block_size_max,
+                    offset_max=args.offset_max,
+                    min_blob_size_max=args.min_blob_size_max,
+                    max_blob_size_max=args.max_blob_size_max,
+                    write_file=True)
+
+    cap.release()
 
 if __name__ == "__main__":
+
     main()

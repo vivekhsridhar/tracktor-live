@@ -45,6 +45,7 @@ def get_frame(cap):
         raise EOFError("frame could not be obtained")
     frame_index = cap.get(1)
 
+    print("got frame")
     return frame, frame_index
 
 
@@ -52,6 +53,7 @@ def get_contours(frame, block_size,
                     meas_last, meas_now,
                     min_area, max_area,
                     offset, scaling,
+                    invert=True,
                     draw_contours=False
                 ):
     """
@@ -65,7 +67,7 @@ def get_contours(frame, block_size,
                             fy=scaling,
                             interpolation=cv2.INTER_LINEAR
                         )
-    thresh = tr.colour_to_thresh(frame, block_size, offset)
+    thresh = tr.colour_to_thresh(frame, block_size, offset, invert=invert)
     final, contours, meas_last, meas_now = tr.detect_and_draw_contours(
                                             frame,
                                             thresh,
@@ -131,15 +133,15 @@ if __name__ == "__main__":
                         )
 
 
+    meas_last = [[0, 0]]
+    meas_now = [[0, 0]]
+
     while True:
         try:
             frame, frame_index = get_frame(cap)
         except EOFError:
             print("File completed")
             quit()
-
-        meas_last = [[0, 0]]
-        meas_now = [[0, 0]]
 
         final, contours, meas_last, meas_now = get_contours(
                                 frame,

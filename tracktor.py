@@ -120,7 +120,7 @@ def detect_and_draw_contours(frame, thresh, meas_last,
     final = frame.copy()
 
     i = 0
-    meas_last = meas_now.copy()
+    meas_last = meas_now[:]
     del meas_now[:]
     while i < len(contours):
         area = cv2.contourArea(contours[i])
@@ -219,6 +219,7 @@ def hungarian_algorithm(meas_last, meas_now):
 
     meas_last = list(meas_last)
     meas_now = list(meas_now)
+
     cost = cdist(meas_last, meas_now)
     row_ind, col_ind = linear_sum_assignment(cost)
     return row_ind, col_ind
