@@ -129,13 +129,16 @@ class TracktorClient:
         return clock
 
     def _eachiter(self):
-        data = self.get_data()
-        clock = self.get_clock()
-        if clock[-1] > -1.0-1e-8 and clock[-1] < -1.0 + 1e-8:#FIXME
+        try:
+            data = self.get_data()
+            clock = self.get_clock()
+            if clock[-1] > -1.0-1e-8 and clock[-1] < -1.0 + 1e-8:#FIXME
+                self.running.value = False
+            else:
+                for funcname in self.casettes:
+                    self.casettes[funcname](data)
+        except EOFError:#server process died
             self.running.value = False
-        else:
-            for funcname in self.casettes:
-                self.casettes[funcname](data)
 
     def run(self):
         """

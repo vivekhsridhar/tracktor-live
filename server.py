@@ -32,6 +32,7 @@ def _runforever(server):
         try:
             server._eachframe(databuffer, clockbuffer)
         except KeyboardInterrupt:
+            server.running.value = False
             break
 
 class SyncManager(BaseManager): pass
@@ -227,8 +228,10 @@ class TracktorServer:
         clockbuffer[-1] = time.time() - self.t_init
         databuffer[:,:,-1] = np.random.random((self.n_ind, 2))
         self.semaphore.release()
+
 #    def dumpvideo(self, outfile=None)
 #    def dumpdata(self, outfile=None)
+
     def run(self):
         self.t_init = time.time()
         self.running = mp.Value('b', True)
@@ -297,9 +300,9 @@ if __name__ == "__main__":
         server.run()
 
         tnow = time.time()
-        while time.time() - tnow < 5.0:
+        while time.time() - tnow < 5.0 and server.running.value:
             print(server.get_data()[:,:,-1], end="\033[K\r")
-        while not server.timed_out():
+        while not server.timed_out() and server.running.value:
             time.sleep(0.2)
 #        time.sleep(0.01)
     except KeyboardInterrupt:
