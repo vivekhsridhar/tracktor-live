@@ -40,12 +40,12 @@ def get_frame(cap):
         frame, frame_index
     """
 
+    assert cap.isOpened()
     ret, frame = cap.read()
     if not ret:
-        raise EOFError("frame could not be obtained")
+        raise IOError("frame could not be obtained")
     frame_index = cap.get(1)
 
-    print("got frame")
     return frame, frame_index
 
 
@@ -53,6 +53,7 @@ def get_contours(frame, block_size,
                     meas_last, meas_now,
                     min_area, max_area,
                     offset, scaling,
+                    fps=None,
                     invert=True,
                     draw_contours=False
                 ):
@@ -61,6 +62,7 @@ def get_contours(frame, block_size,
     """
     # FIXME: write docstring
 
+    del fps
     frame = cv2.resize(frame,
                             None,
                             fx=scaling,
@@ -71,10 +73,10 @@ def get_contours(frame, block_size,
     final, contours, meas_last, meas_now = tr.detect_and_draw_contours(
                                             frame,
                                             thresh,
-                                            meas_last,
-                                            meas_now,
-                                            min_area,
-                                            max_area,
+                                            meas_last=meas_last,
+                                            meas_now=meas_now,
+                                            min_area=min_area,
+                                            max_area=max_area,
                                             draw_contours=draw_contours
                                         )
     return final, contours, meas_last, meas_now
