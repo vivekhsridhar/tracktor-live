@@ -17,7 +17,7 @@ import pickle
 import random
 import socket
 import time
-import uuid
+import ulid
 
 import cv2
 import numpy as np
@@ -29,8 +29,8 @@ import trackutils
 
 ADDR='127.0.0.1'
 
-def _runforever(server, vid_source):
-    cap = trackutils.get_vid(server.vidinput, vidtype=server.vid_source)
+def _runforever(server):
+    cap = trackutils.get_vid(server.vidinput, vidtype=server.vid_source_type)
     t_init = time.time()
     databuffer, clockbuffer = server.setup_shared_arrays()
     while server.running.value and not server.timed_out():
@@ -93,20 +93,21 @@ class TracktorServer:
         """
 
         if not feed_id:
-            self.feed_id = uuid.uuid4()
+            self.feed_id = str(ulid.ULID())
         else:
             self.feed_id = feed_id
         self.buffer_size = buffer_size
         self.datfile = datfile
-        self.keep_recordings = keep_recordings
-        self.keep_video = keep_video
+        self.keep_recordings = mp.Value('b', keep_recordings)
+        self.keep_video = mp.Value('b', keep_video)
         self.n_ind = n_ind
         self.params = params
         self.port_num = port_num
         self.recfile = recfile
         self.vidinput = vidinput
-        self.write_recordings = write_recordings
-        self.write_video = write_video
+        self.write_recordings = mp.Value('b', write_recordings)
+        self.write_video = mp.Value('b', write_video)
+
         if timeout is None:
             self.timeout = np.inf
         else:
@@ -134,18 +135,24 @@ class TracktorServer:
 
         self.framesbuffer = [np.nan for i in range(int(self.fps * self.buffer_size))]
         self.framesbuffer = self.resmanager.list(self.framesbuffer)
-        self.vid_source = "cam"
+        self.vid_source_type = "cam"
         if not realtime:
-            self.vid_source = "file"
+            self.vid_source_type = "file"
 
 
         self.create_feed_file()
+        self.atstart = {}
         self.casettes = {}
+        self.atstop = {}
 
         self.meas_last = [[0, 0] for j in range(self.n_ind)]
         self.meas_now = [[0, 0] for j in range(self.n_ind)]
         self.meas_last = self.resmanager.list(self.meas_last)
         self.meas_now = self.resmanager.list(self.meas_now)
+
+        self.recorded_frames = self.resmanager.list()
+        self.recorded_points = self.resmanager.list()
+        self.recorded_times = self.resmanager.list()
         
     def __str__(self):
         return f"{self.__class__.__name__} object feed_id:{self.feed_id}"
@@ -155,7 +162,17 @@ class TracktorServer:
 
     def __call__(self, f):
         assert callable(f), f"decorate only functions."
+        self.atstart[f.__name__] = f
+        return f
+
+    def __call__(self, f):
+        assert callable(f), f"decorate only functions."
         self.casettes[f.__name__] = f
+        return f
+
+    def __call__(self, f):
+        assert callable(f), f"decorate only functions."
+        self.atstop[f.__name__] = f
         return f
 
     def get_feed_filename(self):
@@ -170,7 +187,7 @@ class TracktorServer:
             "datashm":      self.datashm.name,
             "clockshm":     self.clockshm.name,
             "port_num":      self.port_num,
-            "vid_source":   self.vid_source,
+            "vid_source":   self.vid_source_type,
             "params":       self.params
             }
 
@@ -231,27 +248,27 @@ class TracktorServer:
     def _eachframe(self, cap, databuffer, clockbuffer):#tracking happens here
 
         try:
-            frame, frame_index = trackutils.get_frame(cap)
+            self.current_frame, frame_index = trackutils.get_frame(cap)
         except EOFError as e:
-            if self.vid_source == "file":
+            if self.vid_source_type == "file":
                 # file completed
                 self.running.value = False
             else:
                 print(f"encountered inexplicable EOFERROR: {e}")
                 pass
 
-        final, contours,\
+        self.current_frame, contours,\
             self.meas_last, self.meas_now = trackutils.get_contours(
-                                            frame=frame,
+                                            frame=self.current_frame,
                                             meas_last=self.meas_last,
                                             meas_now=self.meas_now,
                                             scaling=1.0,#FIXME
                                             draw_contours=self.draw,
-                                            **self.params#FIXME:issue in `invert` from paramfixing
+                                            **self.params
                                         )
-# FIXME: Hungarian algorithm causes everything to crash whenever no objects detected
-        final, self.meas_now = trackutils.cleanup_centroids(
-                                    final,
+
+        self.current_frame, self.meas_now = trackutils.cleanup_centroids(
+                                    self.current_frame,
                                     contours,
                                     n_inds=self.n_ind,
                                     meas_last=self.meas_last,
@@ -259,26 +276,34 @@ class TracktorServer:
                                     mot=True,#FIXME
                                     frame_index=frame_index,
                                     draw_circles=self.draw,
-                                    use_kmeans=True#FIXME
+                                    use_kmeans=True
                                 )
 
-        if len(self.meas_now) == 0:
-            print("-1,-1")
-        else:
-            print(",".join((str(x) for x in self.meas_now[0])))
-
-#        cv2.imshow('Tracking', frame)
-#        cv2.waitKey(1)
-
         self.semaphore.acquire()
+
         databuffer[:,:,:-1] = databuffer[:,:,1:]
         clockbuffer[:-1] = clockbuffer[1:]
 
         clockbuffer[-1] = time.time() - self.t_init
-        if len(self.meas_now) == 0:
-            databuffer[:,:,-1] = -1.0
-        else:
-            databuffer[:,:,-1] = self.meas_now[:self.n_ind]#???
+        databuffer[:,:,-1] = -1.0
+        databuffer[:len(self.meas_now[:self.n_ind]),:,-1] = self.meas_now[:self.n_ind]#if you found <= n_ind, fill those up. rest remain -1.0
+        self.framesbuffer[:-1] = self.framesbuffer[1:]
+        self.framesbuffer[-1] = self.current_frame.copy()
+
+        if self.keep_video:
+            if len(self.recorded_frames) == 0:
+                self.recorded_frames.extend(self.framesbuffer)
+            else:
+                self.recorded_frames.append(self.framesbuffer[-1])
+
+        if self.keep_recordings:
+            if len(self.recorded_points) == 0:
+                self.recorded_points.extend(list(self.databuffer))
+                self.recorded_times.extend(list(self.clockbuffer))
+            else:
+                self.recorded_points.append(self.databuffer[:,:,-1])
+                self.recorded_times.append(self.clockbuffer[-1])
+
         self.semaphore.release()
 
 #    def dumpvideo(self, outfile=None)
@@ -287,7 +312,7 @@ class TracktorServer:
     def run(self):
         self.t_init = time.time()
         self.running = mp.Value('b', True)
-        self.serverproc = mp.Process(target=_runforever, args=(self, self.vid_source))
+        self.serverproc = mp.Process(target=_runforever, args=(self,))
         self.serverproc.start()
 
     def timed_out(self):
