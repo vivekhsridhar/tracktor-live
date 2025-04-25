@@ -166,6 +166,9 @@ def list_feeds():
 def spawn_trclient(feed_id, run_interval=0.005):
     return TracktorClient(feed_id, run_interval)
 
+def close_trclient(client):
+    client.stop()
+
 def run_trclient(client):
     try:
         client.run()
