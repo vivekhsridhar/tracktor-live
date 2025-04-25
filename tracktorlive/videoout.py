@@ -23,4 +23,3 @@ def vidout(frames, filename, fps, framesize):
 def prl_vidout(frames, filename, fps, framesize):
     proc = mp.Process(target=vidout, args=(frames, filename, fps, framesize))
     proc.start()
-    proc.close()

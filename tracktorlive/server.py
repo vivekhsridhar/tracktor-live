@@ -132,15 +132,14 @@ class TracktorServer:
         self.recorded_frames = [] 
         self.recorded_points = [] 
         self.recorded_times  = [] 
+        cap_temp = cv2.VideoCapture(self.vidinput)
+        ret, frame = cap_temp.read()
+        self.framesize = (int(frame.shape[1]*1.0),
+                            int(frame.shape[0]*1.0))# FIXME: scaling
 
         if self.write_video.value:
             os.makedirs(self.feed_id, exist_ok=True)
-            cap_temp = cv2.VideoCapture(self.vidinput)
             fourcc = cv2.VideoWriter_fourcc(*'XVID')
-            ret, frame = cap_temp.read()
-            self.framesize = (int(frame.shape[1]*1.0),
-                                int(frame.shape[0]*1.0))# FIXME: scaling
-
             self.vidout = cv2.VideoWriter(
                                     filename=joinpath(self.feed_id, str(ulid.ULID())+'.avi'),
                                     fourcc = fourcc,
@@ -148,7 +147,7 @@ class TracktorServer:
                                     frameSize = self.framesize,
                                     isColor = True
                                 )
-            cap_temp.release()
+        cap_temp.release()
 
         if self.write_recordings.value:
             os.makedirs(self.feed_id, exist_ok=True)
@@ -230,7 +229,7 @@ class TracktorServer:
 
         return databuffer, clockbuffer
 
-    def get_data(self):
+    def get_data_and_clock(self):
         self.semaphore.acquire()
         data = self.databuffer.copy()
         clock = self.clockbuffer.copy()
@@ -296,13 +295,13 @@ class TracktorServer:
         self.framesbuffer[:-1] = self.framesbuffer[1:]
         self.framesbuffer[-1] = self.current_frame.copy()
 
-        if self.keep_video:
+        if self.keep_video.value:
             if len(self.recorded_frames) == 0:
-                self.recorded_frames.extend(self.framesbuffer)
+                self.recorded_frames.extend([fr for fr in self.framesbuffer if fr is not None])
             else:
                 self.recorded_frames.append(self.framesbuffer[-1])
 
-        if self.keep_recordings:
+        if self.keep_recordings.value:
             if len(self.recorded_points) == 0:
                 self.recorded_points.extend(list(self.databuffer))
                 self.recorded_times.extend(list(self.clockbuffer))
