@@ -43,7 +43,7 @@ def _runforever(server):
     while server.running.value and not server.timed_out():
         try:
             server._eachframe(cap, databuffer, clockbuffer)
-            for func in server.atstart:
+            for func in server.casettes:
                 server.casettes[func](server)
         except KeyboardInterrupt:
             server.running.value = False
@@ -231,16 +231,10 @@ class TracktorServer:
     def get_data(self):
         self.semaphore.acquire()
         data = self.databuffer.copy()
+        clock = self.clockbuffer.copy()
         self.semaphore.release()
 
-        return data
-
-    def get_times(self):
-        self.semaphore.acquire()
-        times = self.clockbuffer.copy()
-        self.semaphore.release()
-
-        return times
+        return data, clock
 
     def get_clients(self):
         return glob.glob(
@@ -284,6 +278,7 @@ class TracktorServer:
                                     use_kmeans=True
                                 )
 
+        print(len(self.meas_now))
         self.semaphore.acquire()
 
         databuffer[:,:,:-1] = databuffer[:,:,1:]
@@ -323,7 +318,7 @@ class TracktorServer:
             entry.extend(list(databuffer.copy()[:,:,-1].reshape(2*self.n_ind)))
             entry=[str(x) for x in entry]
             print(",".join(entry), file=self.recout, flush=True)
-        print(self.clockbuffer[-1], self.databuffer[:,:,-1])
+#        print(self.clockbuffer[-1], self.databuffer[:,:,-1])
         self.semaphore.release()
 
 #    def dumpvideo(self, outfile=None)
@@ -374,12 +369,37 @@ class TracktorServer:
 
         os.remove(self.get_feed_filename())
 
-def spawn_trserver
-def close_trserver
-def run_trserver
+def spawn_trserver(vidinput, params, n_ind=1, **kwargs):
+    port_num = random.choice(range(12000, 20000))
+    sync.prl_sem_server(port_num)
+    server = TracktorServer(
+                    vidinput=vidinput,
+                    params=params,
+                    n_ind=n_ind,
+                    port_num=port_num,
+                    **kwargs
+                )
+    return server
+
+def close_trserver(server):
+    if server.running.value:
+        server.stop()
+    del server
+
+def run_trserver(server):
+    try:
+        server.run()
+
+        tnow = time.time()
+        while not server.timed_out() and server.running.value:
+            time.sleep(0.2)
+    except KeyboardInterrupt:
+        print(f"Terminating server: {server.feed_id}")
+    finally:
+        close_trserver(server)
 
 if __name__ == "__main__":
-    vidinput = "/home/pranav/Personal/Projects/temp/tracktorlive/Data/vids/fish_video.mp4"
+    vidinput = "/home/pranav/Personal/Projects/temp/tracktorlive/Data/output.mp4"
 #    vidinput = 0
     cap = cv2.VideoCapture(vidinput)
 
@@ -392,36 +412,12 @@ if __name__ == "__main__":
     trackparams["fps"] = cap.get(cv2.CAP_PROP_FPS)
     cap.release()
 
-    semmanager = mp.Process(target=run_semaphore_server)
-    semmanager.start()
-    server = TracktorServer(
-                    vidinput=vidinput,
-                    params=trackparams,
-                    n_ind=1,
-                    buffer_size=1,#seconds
-                    datfile=None,
-                    draw=True,
-                    feed_id="trial",
-                    keep_recordings=False,
-                    keep_video=False,
-                    realtime=False,
-                    recfile=None,
-                    timeout=None,
-                    write_recordings=False,
-                    write_video=False
-                )
-    try:
-        server.run()
+    server = spawn_trserver(vidinput, trackparams,
+                            n_ind=2, realtime=False, draw=True)
+    
+    @server
+    def show(server):
+        cv2.imshow('Tracking', server.current_frame)
+        cv2.waitKey(1)
 
-        tnow = time.time()
-        while not server.timed_out() and server.running.value:
-            time.sleep(0.2)
-#        time.sleep(0.01)
-    except KeyboardInterrupt:
-        print("Stopping everything now")
-    finally:
-        server.stop()
-        del server
-        semmanager.terminate()
-        semmanager.join()
-        semmanager.close()
+    run_trserver(server)

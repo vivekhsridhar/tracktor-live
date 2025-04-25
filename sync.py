@@ -18,6 +18,7 @@ ADDR='127.0.0.1'
 class SyncManager(BaseManager): pass
 
 def _make_named_sem(name):
+    global _semaphores
     if name not in _semaphores:
         _semaphores[name] = mp.Semaphore(1)
     return _semaphores[name]
@@ -31,6 +32,10 @@ def run_semaphore_server(port_num):
         s.serve_forever()
     except KeyboardInterrupt:
         s.stop()
+
+def prl_sem_server(port_num):
+    serverproc = mp.Process(target=run_semaphore_server, args=(port_num,))
+    serverproc.start()
 
 def wait_for_server(address, timeout=5.0):
     host, port = address
