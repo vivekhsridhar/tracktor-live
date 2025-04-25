@@ -39,6 +39,9 @@ def _runforever(server):
         except KeyboardInterrupt:
             server.running.value = False
             break
+        except trackutils.VideoEndedError:
+            server.running.value = False
+            break
     cap.release()
     #server.stop()#???
 
@@ -133,8 +136,8 @@ class TracktorServer:
         self.datashm, self.clockshm = self.setup_shared_mems()
         self.databuffer, self.clockbuffer = self.setup_shared_arrays()
 
-        self.framesbuffer = [np.nan for i in range(int(self.fps * self.buffer_size))]
-        self.framesbuffer = self.resmanager.list(self.framesbuffer)
+        self.framesbuffer = [None for i in range(int(self.fps * self.buffer_size))]
+#        self.framesbuffer = self.resmanager.list(self.framesbuffer)
         self.vid_source_type = "cam"
         if not realtime:
             self.vid_source_type = "file"
@@ -153,7 +156,34 @@ class TracktorServer:
         self.recorded_frames = self.resmanager.list()
         self.recorded_points = self.resmanager.list()
         self.recorded_times = self.resmanager.list()
-        
+
+        if self.write_video.value:
+            os.makedirs(self.feed_id, exist_ok=True)
+            cap_temp = cv2.VideoCapture(self.vidinput)
+            fourcc = cv2.VideoWriter_fourcc(*'DIVX')
+            ret, frame = cap_temp.read()
+            out_framesize = (int(frame.shape[1]*1.0),
+                                int(frame.shape[0]*1.0))# FIXME: scaling
+
+            self.vidout = cv2.VideoWriter(
+                                    filename=joinpath(self.feed_id, str(ulid.ULID())+'.avi'),
+                                    fourcc = fourcc,
+                                    fps = cap_temp.get(cv2.CAP_PROP_FPS),
+                                    frameSize = out_framesize,
+                                    isColor = True
+                                )
+            cap_temp.release()
+
+        if self.write_recordings.value:
+            os.makedirs(self.feed_id, exist_ok=True)
+            fname = str(ulid.ULID())+'.csv'
+            fname = joinpath(self.feed_id, fname)
+            self.recout = open(fname, 'w')
+            cols = ['time']
+            for i in range(self.n_ind):
+                cols.extend([f"x{i}", f"y{i}"])
+            print(",".join(cols), file=self.recout,flush=True)
+
     def __str__(self):
         return f"{self.__class__.__name__} object feed_id:{self.feed_id}"
 
@@ -249,10 +279,11 @@ class TracktorServer:
 
         try:
             self.current_frame, frame_index = trackutils.get_frame(cap)
-        except EOFError as e:
+        except trackutils.VideoEndedError as e:
             if self.vid_source_type == "file":
                 # file completed
                 self.running.value = False
+                return None
             else:
                 print(f"encountered inexplicable EOFERROR: {e}")
                 pass
@@ -284,9 +315,14 @@ class TracktorServer:
         databuffer[:,:,:-1] = databuffer[:,:,1:]
         clockbuffer[:-1] = clockbuffer[1:]
 
-        clockbuffer[-1] = time.time() - self.t_init
+        if self.vid_source_type == "cam":
+            clockbuffer[-1] = time.time() - self.t_init
+        else:
+            clockbuffer[-1] = frame_index
+
         databuffer[:,:,-1] = -1.0
-        databuffer[:len(self.meas_now[:self.n_ind]),:,-1] = self.meas_now[:self.n_ind]#if you found <= n_ind, fill those up. rest remain -1.0
+        if len(self.meas_now) > 0:
+            databuffer[:len(self.meas_now[:self.n_ind]),:,-1] = self.meas_now[:self.n_ind]#if you found <= n_ind, fill those up. rest remain -1.0
         self.framesbuffer[:-1] = self.framesbuffer[1:]
         self.framesbuffer[-1] = self.current_frame.copy()
 
@@ -304,7 +340,19 @@ class TracktorServer:
                 self.recorded_points.append(self.databuffer[:,:,-1])
                 self.recorded_times.append(self.clockbuffer[-1])
 
+
+        if self.write_video.value:
+            self.vidout.write(self.current_frame)
+
+        if self.write_recordings.value:
+            entry=[clockbuffer[-1]]
+            entry.extend(list(databuffer.copy()[:,:,-1].reshape(2*self.n_ind)))
+            entry=[str(x) for x in entry]
+            print(",".join(entry), file=self.recout, flush=True)
         self.semaphore.release()
+
+        del self.current_frame
+        del self.meas_now[:]
 
 #    def dumpvideo(self, outfile=None)
 #    def dumpdata(self, outfile=None)
@@ -328,6 +376,10 @@ class TracktorServer:
 
         self.databuffer[:,:,-1] = -1.0
         self.clockbuffer[-1] = -1.0
+        if self.write_video.value:
+            self.vidout.release()
+        if self.write_recordings.value:
+            self.recout.close()
 
     def __del__(self):
         if self.running.value:
@@ -353,11 +405,11 @@ class TracktorServer:
 
 
 if __name__ == "__main__":
-#    vidinput = "/home/pranav/Personal/Projects/temp/tracktorlive/Data/vids/fish_video.mp4"
-    vidinput = 0
+    vidinput = "/home/pranav/Personal/Projects/temp/tracktorlive/Data/vids/fish_video.mp4"
+#    vidinput = 0
     cap = cv2.VideoCapture(vidinput)
 
-    tune_gui = True
+    tune_gui = False
     if tune_gui:
         trackparams = paramfixing.gui_set_params(cap, "cam", write_file=True)
     else:
@@ -372,17 +424,17 @@ if __name__ == "__main__":
                     vidinput=vidinput,
                     params=trackparams,
                     n_ind=1,
-                    buffer_size=10,#seconds
+                    buffer_size=1,#seconds
                     datfile=None,
                     draw=True,
                     feed_id="trial",
                     keep_recordings=False,
                     keep_video=False,
-                    realtime=True,
+                    realtime=False,
                     recfile=None,
                     timeout=None,
-                    write_recordings=False,
-                    write_video=False
+                    write_recordings=True,
+                    write_video=True
                 )
     try:
         server.run()

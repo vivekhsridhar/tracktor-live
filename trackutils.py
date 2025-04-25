@@ -15,6 +15,11 @@ import numpy as np
 import config
 import tracktor as tr
 
+class VideoEndedError(IOError):
+    """Raised when a video has reached its end."""
+    def __init__(self, message="The video has ended."):
+        super().__init__(message)
+
 def get_vid(source, vidtype="cam"):
     """
     Gets a cv2.VideoCapture object from given source
@@ -30,7 +35,6 @@ def get_vid(source, vidtype="cam"):
 
     return cap
 
-
 def get_frame(cap):
     """
     gets one frame from cap
@@ -43,7 +47,7 @@ def get_frame(cap):
     assert cap.isOpened()
     ret, frame = cap.read()
     if not ret:
-        raise IOError("frame could not be obtained")
+        raise VideoEndedError("frame could not be obtained")
     frame_index = cap.get(1)
 
     return frame, frame_index
@@ -142,7 +146,8 @@ if __name__ == "__main__":
     while True:
         try:
             frame, frame_index = get_frame(cap)
-        except EOFError:
+            print(frame_index, end="\033[K\r")
+        except VideoEndedError:
             print("File completed")
             quit()
 
