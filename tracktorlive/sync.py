@@ -36,6 +36,7 @@ def run_semaphore_server(port_num):
 def prl_sem_server(port_num):
     serverproc = mp.Process(target=run_semaphore_server, args=(port_num,))
     serverproc.start()
+    return serverproc
 
 def wait_for_server(address, timeout=5.0):
     host, port = address

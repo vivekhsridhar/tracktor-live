@@ -29,22 +29,22 @@ SyncManager.register('get_semaphore')
 def runforever(obj):
     while obj.running.value:
         try:
-            time.sleep(0.5*obj.run_interval)
+            time.sleep(obj.run_interval) #to not overload everything
             obj._eachiter()
         except KeyboardInterrupt:
             obj.running.value=False
             break
+        except ConnectionResetError:
+            print(f"Server: {obj.feed_id} disconnected.")
+            obj.running.value = False
+            break
 
 class TracktorClient:
 
-    def __init__(self, feed_id, addr='127.0.0.1', run_interval=None):
+    def __init__(self, feed_id, run_interval=None):
         """
         initialises a TracktorClient object.
         Args:
-            shmname (shared_memory address, see docs): address to last k seconds of data
-            configdict: (mp.Manager.dict): configuration dictionary of server
-            addr (str) and port_num (int): address specs of the BaseManager for semaphore locks
-            run_interval (float): how often attached functions must run. if absent, defaults to 2*FPS
         """
 
         self.feed_id = feed_id
@@ -55,7 +55,7 @@ class TracktorClient:
         self.clientfile = self.get_client_filename()
         self.make_client_file()
 
-        sync.wait_for_server((ADDR, self.port_num))
+        sync.wait_for_server((sync.ADDR, self.port_num))
         self.manager = SyncManager(address=('127.0.0.1', self.port_num),
                                         authkey=b'secret')
         self.manager.connect()
@@ -68,9 +68,8 @@ class TracktorClient:
         self.params = self.feed_info["params"]
 
         self.fps = int(self.feed_info["fps"])
-        self.interframe = 1/self.fps
         if run_interval is None:
-            self.run_interval = 0.5*self.interframe
+            self.run_interval = 0.005
         else:
             self.run_interval = run_interval
 
@@ -138,7 +137,6 @@ class TracktorClient:
     def run(self):
         """
         Runs all registered functions at specified run interval.
-        (default: 2*FPS)
         """
         self.running = mp.Value('b', True)
         self.clientproc = mp.Process(target=runforever, args=(self,))
@@ -165,16 +163,27 @@ class TracktorClient:
 def list_feeds():
     return glob.glob(joinpath(config.FEEDS_DIR, "tlfeed-*"))
 
+def spawn_trclient(feed_id, run_interval=0.005):
+    return TracktorClient(feed_id, run_interval)
+
+def run_trclient(client):
+    try:
+        client.run()
+        while client.running.value:
+            time.sleep(0.2)
+    except KeyboardInterrupt:
+        print("Terminating client.")
+    finally:
+        client.stop()
+
+
 if __name__ == "__main__":
 
-    client = TracktorClient(feed_id="trial", addr='127.0.0.1', run_interval=0.05)
+    client = spawn_trclient("trial")
 
     @client
     def printstuff(data, clock):
         print(clock[-1], data[:,:,-1])
 
-    client.run()
-
-    time.sleep(10)
-    client.stop()
+    run_trclient(client)
     del client

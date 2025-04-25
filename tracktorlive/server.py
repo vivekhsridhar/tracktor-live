@@ -27,6 +27,7 @@ import memorymanagement as mmg
 import paramfixing
 import sync
 import trackutils
+import videoout
 
 ADDR='127.0.0.1'
 class SyncManager(BaseManager): pass
@@ -51,6 +52,7 @@ def _runforever(server):
         except trackutils.VideoEndedError:
             server.running.value = False
             break
+
     for func in server.atstop:
         server.atstop[func](server)
     cap.release()
@@ -127,23 +129,23 @@ class TracktorServer:
         self.meas_last = self.resmanager.list(self.meas_last)
         self.meas_now = self.resmanager.list(self.meas_now)
 
-        self.recorded_frames = self.resmanager.list()
-        self.recorded_points = self.resmanager.list()
-        self.recorded_times = self.resmanager.list()
+        self.recorded_frames = [] 
+        self.recorded_points = [] 
+        self.recorded_times  = [] 
 
         if self.write_video.value:
             os.makedirs(self.feed_id, exist_ok=True)
             cap_temp = cv2.VideoCapture(self.vidinput)
-            fourcc = cv2.VideoWriter_fourcc(*'DIVX')
+            fourcc = cv2.VideoWriter_fourcc(*'XVID')
             ret, frame = cap_temp.read()
-            out_framesize = (int(frame.shape[1]*1.0),
+            self.framesize = (int(frame.shape[1]*1.0),
                                 int(frame.shape[0]*1.0))# FIXME: scaling
 
             self.vidout = cv2.VideoWriter(
                                     filename=joinpath(self.feed_id, str(ulid.ULID())+'.avi'),
                                     fourcc = fourcc,
                                     fps = cap_temp.get(cv2.CAP_PROP_FPS),
-                                    frameSize = out_framesize,
+                                    frameSize = self.framesize,
                                     isColor = True
                                 )
             cap_temp.release()
@@ -278,7 +280,6 @@ class TracktorServer:
                                     use_kmeans=True
                                 )
 
-        print(len(self.meas_now))
         self.semaphore.acquire()
 
         databuffer[:,:,:-1] = databuffer[:,:,1:]
@@ -318,11 +319,19 @@ class TracktorServer:
             entry.extend(list(databuffer.copy()[:,:,-1].reshape(2*self.n_ind)))
             entry=[str(x) for x in entry]
             print(",".join(entry), file=self.recout, flush=True)
-#        print(self.clockbuffer[-1], self.databuffer[:,:,-1])
         self.semaphore.release()
 
-#    def dumpvideo(self, outfile=None)
-#    def dumpdata(self, outfile=None)
+    def dumpvideo(self, outfile=None):
+        if outfile is not None:
+            self.semaphore.acquire()
+            frcopy = self.recorded_frames.copy()
+            self.semaphore.release()
+
+            videoout.prl_vidout(frcopy, outfile, self.fps, self.framesize)
+
+        self.recorded_frames = []
+
+#    def dumpdata(self, outfile=None):#FIXME
 
     def run(self):
         self.t_init = time.time()
@@ -371,7 +380,7 @@ class TracktorServer:
 
 def spawn_trserver(vidinput, params, n_ind=1, **kwargs):
     port_num = random.choice(range(12000, 20000))
-    sync.prl_sem_server(port_num)
+    semm = sync.prl_sem_server(port_num)
     server = TracktorServer(
                     vidinput=vidinput,
                     params=params,
@@ -379,14 +388,15 @@ def spawn_trserver(vidinput, params, n_ind=1, **kwargs):
                     port_num=port_num,
                     **kwargs
                 )
-    return server
+    return server, semm
 
-def close_trserver(server):
-    if server.running.value:
-        server.stop()
-    del server
+def close_trserver(server, semm):
+    server.stop()
+    semm.terminate()
+    semm.join()
+    semm.close()
 
-def run_trserver(server):
+def run_trserver(server, semm):
     try:
         server.run()
 
@@ -396,7 +406,7 @@ def run_trserver(server):
     except KeyboardInterrupt:
         print(f"Terminating server: {server.feed_id}")
     finally:
-        close_trserver(server)
+        close_trserver(server, semm)
 
 if __name__ == "__main__":
     vidinput = "/home/pranav/Personal/Projects/temp/tracktorlive/Data/output.mp4"
@@ -405,19 +415,17 @@ if __name__ == "__main__":
 
     tune_gui = False
     if tune_gui:
-        trackparams = paramfixing.gui_set_params(cap, "cam", write_file=True)
+        trackparams = paramfixing.gui_set_params(cap, "file", write_file=True)
     else:
         with open("params.json") as f:
             trackparams = json.load(f)
     trackparams["fps"] = cap.get(cv2.CAP_PROP_FPS)
     cap.release()
 
-    server = spawn_trserver(vidinput, trackparams,
-                            n_ind=2, realtime=False, draw=True)
+    server, semm = spawn_trserver(vidinput, trackparams,
+                            n_ind=2, realtime=False, draw=True,
+                            feed_id="trial")
     
-    @server
-    def show(server):
-        cv2.imshow('Tracking', server.current_frame)
-        cv2.waitKey(1)
 
-    run_trserver(server)
+    run_trserver(server, semm)
+    del server
