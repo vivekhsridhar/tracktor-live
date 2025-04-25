@@ -25,52 +25,36 @@ import numpy as np
 import config
 import memorymanagement as mmg
 import paramfixing
+import sync
 import trackutils
 
 ADDR='127.0.0.1'
+class SyncManager(BaseManager): pass
+SyncManager.register('get_semaphore')
+
 
 def _runforever(server):
     cap = trackutils.get_vid(server.vidinput, vidtype=server.vid_source_type)
     t_init = time.time()
     databuffer, clockbuffer = server.setup_shared_arrays()
+
+    for func in server.atstart:
+        server.atstart[func](server)
     while server.running.value and not server.timed_out():
         try:
             server._eachframe(cap, databuffer, clockbuffer)
+            for func in server.atstart:
+                server.casettes[func](server)
         except KeyboardInterrupt:
             server.running.value = False
             break
         except trackutils.VideoEndedError:
             server.running.value = False
             break
+    for func in server.atstop:
+        server.atstop[func](server)
     cap.release()
     #server.stop()#???
-
-class SyncManager(BaseManager): pass
-
-def _make_sem():
-    return mp.Semaphore(1)
-
-SyncManager.register('get_semaphore', callable=_make_sem)
-port_num = random.choice(range(12000, 20000))
-def run_semaphore_server():
-    manager = SyncManager(address=(ADDR, port_num), authkey=b'secret')
-    s = manager.get_server()
-    try:
-        s.serve_forever()
-    except KeyboardInterrupt:
-        s.stop()
-
-
-def wait_for_server(address, timeout=5.0):
-    host, port = address
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            with socket.create_connection((host, port), timeout=0.5):
-                return True
-        except (ConnectionRefusedError, socket.timeout):
-            time.sleep(0.1)
-    raise RuntimeError(f"Timeout: could not connect to manager at {address}")
 
 
 class TracktorServer:
@@ -79,14 +63,12 @@ class TracktorServer:
                     params,
                     n_ind,
                     buffer_size=10,#seconds
-                    datfile=None,
                     draw=False,
                     feed_id=None,
                     keep_recordings=False,
                     keep_video=False,
-                    port_num=port_num,
+                    port_num=281197,
                     realtime=True,
-                    recfile=None,
                     timeout=None,
                     write_recordings=False,
                     write_video=False
@@ -100,13 +82,11 @@ class TracktorServer:
         else:
             self.feed_id = feed_id
         self.buffer_size = buffer_size
-        self.datfile = datfile
         self.keep_recordings = mp.Value('b', keep_recordings)
         self.keep_video = mp.Value('b', keep_video)
         self.n_ind = n_ind
         self.params = params
         self.port_num = port_num
-        self.recfile = recfile
         self.vidinput = vidinput
         self.write_recordings = mp.Value('b', write_recordings)
         self.write_video = mp.Value('b', write_video)
@@ -117,31 +97,25 @@ class TracktorServer:
             self.timeout = timeout
         self.draw = draw
 
-        wait_for_server((ADDR, port_num))
-        self.resmanager = mp.Manager()
+        sync.wait_for_server((ADDR, port_num))
         self.manager = SyncManager(address=(ADDR, port_num), authkey=b'secret')
         self.manager.connect()
+        self.semaphore = self.manager.get_semaphore(self.feed_id)
 
-        self.semaphore = self.manager.get_semaphore()
         self.port_num = port_num
         self.serverproc = None
 
-        if not "fps" in params:
-#            self.fps = self.cap.get(cv2.CAP_PROP_FPS)
-            pass
-        else:
+        if "fps" in params:
             self.fps = params["fps"]
-
 
         self.datashm, self.clockshm = self.setup_shared_mems()
         self.databuffer, self.clockbuffer = self.setup_shared_arrays()
 
+        self.resmanager = mp.Manager()
         self.framesbuffer = [None for i in range(int(self.fps * self.buffer_size))]
-#        self.framesbuffer = self.resmanager.list(self.framesbuffer)
         self.vid_source_type = "cam"
         if not realtime:
             self.vid_source_type = "file"
-
 
         self.create_feed_file()
         self.atstart = {}
@@ -190,7 +164,7 @@ class TracktorServer:
     def __repr__(self):
         return f"{self.__class__.__name__} object feed_id:{self.feed_id}"
 
-    def __call__(self, f):
+    def startfunc(self, f):
         assert callable(f), f"decorate only functions."
         self.atstart[f.__name__] = f
         return f
@@ -200,7 +174,7 @@ class TracktorServer:
         self.casettes[f.__name__] = f
         return f
 
-    def __call__(self, f):
+    def stopfunc(self, f):
         assert callable(f), f"decorate only functions."
         self.atstop[f.__name__] = f
         return f
@@ -349,10 +323,8 @@ class TracktorServer:
             entry.extend(list(databuffer.copy()[:,:,-1].reshape(2*self.n_ind)))
             entry=[str(x) for x in entry]
             print(",".join(entry), file=self.recout, flush=True)
+        print(self.clockbuffer[-1], self.databuffer[:,:,-1])
         self.semaphore.release()
-
-        del self.current_frame
-        del self.meas_now[:]
 
 #    def dumpvideo(self, outfile=None)
 #    def dumpdata(self, outfile=None)
@@ -402,7 +374,9 @@ class TracktorServer:
 
         os.remove(self.get_feed_filename())
 
-
+def spawn_trserver
+def close_trserver
+def run_trserver
 
 if __name__ == "__main__":
     vidinput = "/home/pranav/Personal/Projects/temp/tracktorlive/Data/vids/fish_video.mp4"
@@ -433,8 +407,8 @@ if __name__ == "__main__":
                     realtime=False,
                     recfile=None,
                     timeout=None,
-                    write_recordings=True,
-                    write_video=True
+                    write_recordings=False,
+                    write_video=False
                 )
     try:
         server.run()

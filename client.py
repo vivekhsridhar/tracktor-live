@@ -21,6 +21,10 @@ import uuid
 import numpy as np
 
 import config
+import sync
+
+class SyncManager(BaseManager): pass
+SyncManager.register('get_semaphore')
 
 def runforever(obj):
     while obj.running.value:
@@ -30,8 +34,6 @@ def runforever(obj):
         except KeyboardInterrupt:
             obj.running.value=False
             break
-
-class SyncManager(BaseManager): pass
 
 class TracktorClient:
 
@@ -45,21 +47,19 @@ class TracktorClient:
             run_interval (float): how often attached functions must run. if absent, defaults to 2*FPS
         """
 
-        SyncManager.register('get_semaphore')
         self.feed_id = feed_id
         self.feed_info = self.load_feed_info()
         self.port_num = self.feed_info["port_num"]
 
         self.client_id = str(uuid.uuid4())
         self.clientfile = self.get_client_filename()
-        print(self.clientfile)
         self.make_client_file()
-        print(self.clientfile)
 
+        sync.wait_for_server((ADDR, self.port_num))
         self.manager = SyncManager(address=('127.0.0.1', self.port_num),
                                         authkey=b'secret')
         self.manager.connect()
-        self.semaphore = self.manager.get_semaphore()#q: does this not get a different semaphore?
+        self.semaphore = self.manager.get_semaphore(self.feed_id)
 
         self.datashm = mpshm.SharedMemory(name=self.feed_info["datashm"])
         self.clockshm = mpshm.SharedMemory(name=self.feed_info["clockshm"])
@@ -116,27 +116,21 @@ class TracktorClient:
         with open(self.get_feed_filename(), "rb") as f:
             return pickle.load(f)
 
-    def get_data(self):
+    def get_data_and_clock(self):
         self.semaphore.acquire()
         data = self.dataq.copy()
-        self.semaphore.release()
-        return data
-
-    def get_clock(self):
-        self.semaphore.acquire()
         clock = self.clockq.copy()
         self.semaphore.release()
-        return clock
+        return data, clock
 
     def _eachiter(self):
         try:
-            data = self.get_data()
-            clock = self.get_clock()
+            data, clock = self.get_data_and_clock()
             if clock[-1] > -1.0-1e-8 and clock[-1] < -1.0 + 1e-8:#FIXME
                 self.running.value = False
             else:
                 for funcname in self.casettes:
-                    self.casettes[funcname](data)
+                    self.casettes[funcname](data, clock)
         except EOFError:#server process died
             print("Server died unexpectedly.")
             self.running.value = False
@@ -176,8 +170,8 @@ if __name__ == "__main__":
     client = TracktorClient(feed_id="trial", addr='127.0.0.1', run_interval=0.05)
 
     @client
-    def printstuff(data):
-        print(data[:,:,-1], end="\033[K\r")
+    def printstuff(data, clock):
+        print(clock[-1], data[:,:,-1])
 
     client.run()
 
