@@ -20,8 +20,8 @@ import uuid
 
 import numpy as np
 
-import config
-import sync
+import tracktorlive
+from . import sync
 
 class SyncManager(BaseManager): pass
 SyncManager.register('get_semaphore')
@@ -102,10 +102,10 @@ class TracktorClient:
         return f
 
     def get_feed_filename(self):
-        return joinpath(config.FEEDS_DIR, f"tlfeed-{self.feed_id}")
+        return joinpath(tracktorlive.FEEDS_DIR, f"tlfeed-{self.feed_id}")
 
     def get_client_filename(self):
-        return joinpath(config.CLIENTS_DIR, f"tlclient-{self.feed_id}-{self.client_id}")
+        return joinpath(tracktorlive.CLIENTS_DIR, f"tlclient-{self.feed_id}-{self.client_id}")
 
     def make_client_file(self):
         with open(self.clientfile, "a") as f:
@@ -161,7 +161,7 @@ class TracktorClient:
             os.remove(self.clientfile)
 
 def list_feeds():
-    return glob.glob(joinpath(config.FEEDS_DIR, "tlfeed-*"))
+    return glob.glob(joinpath(tracktorlive.FEEDS_DIR, "tlfeed-*"))
 
 def spawn_trclient(feed_id, run_interval=0.005):
     return TracktorClient(feed_id, run_interval)

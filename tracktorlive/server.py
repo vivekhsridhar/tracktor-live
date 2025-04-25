@@ -22,12 +22,12 @@ import ulid
 import cv2
 import numpy as np
 
-import config
-import memorymanagement as mmg
-import paramfixing
-import sync
-import trackutils
-import videoout
+import tracktorlive
+from . import memorymanagement as mmg
+from . import paramfixing
+from . import sync
+from . import trackutils
+from . import videoout
 
 ADDR='127.0.0.1'
 class SyncManager(BaseManager): pass
@@ -182,7 +182,7 @@ class TracktorServer:
         return f
 
     def get_feed_filename(self):
-        return joinpath(config.FEEDS_DIR, f"tlfeed-{self.feed_id}")
+        return joinpath(tracktorlive.FEEDS_DIR, f"tlfeed-{self.feed_id}")
 
     def create_feed_file(self):
         feeddata = {
@@ -240,7 +240,7 @@ class TracktorServer:
 
     def get_clients(self):
         return glob.glob(
-                joinpath(config.CLIENTS_DIR,
+                joinpath(tracktorlive.CLIENTS_DIR,
                             f"tlclient-{self.feed_id}-*"
                         )
                 )

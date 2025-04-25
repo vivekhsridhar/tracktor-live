@@ -5,7 +5,7 @@ import json
 import cv2
 import numpy as np
 
-import tracktor as tr
+from . import tracktor as tr
 
 
 def parse_arguments():
