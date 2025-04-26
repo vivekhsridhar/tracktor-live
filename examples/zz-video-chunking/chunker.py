@@ -3,8 +3,10 @@
 Example script to chunk video data only when animals approach close by.
 """
 
+import multiprocessing as mp
 import os
 from os.path import join as joinpath
+mp.set_start_method('fork')
 
 import json
 import numpy as np
