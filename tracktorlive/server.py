@@ -44,8 +44,6 @@ def _runforever(server):
     while server.running.value and not server.timed_out():
         try:
             server._eachframe(cap, databuffer, clockbuffer)
-            for func in server.casettes:
-                server.casettes[func](server)
         except KeyboardInterrupt:
             server.running.value = False
             break
@@ -256,6 +254,9 @@ class TracktorServer:
             else:
                 print(f"encountered inexplicable EOFERROR: {e}")
                 pass
+
+        for func in self.casettes:
+            self.casettes[func](self)
 
         self.current_frame, contours,\
             self.meas_last, self.meas_now = trackutils.get_contours(
