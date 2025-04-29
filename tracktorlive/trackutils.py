@@ -98,8 +98,7 @@ def cleanup_centroids(final, contours, n_inds,
 
     if use_kmeans\
             and len(meas_now) != n_inds\
-            and len(meas_now) > 0\
-            and n_inds > 1:
+            and len(meas_now) > 0:
 # FIXME: write docstring
 
         contours, meas_now = tr.apply_k_means(contours, n_inds, meas_now)

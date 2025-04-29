@@ -8,6 +8,7 @@ import platformdirs as pfd
 
 from .server import TracktorServer, spawn_trserver, run_trserver, close_trserver
 from .client import TracktorClient, spawn_trclient, run_trclient, close_trclient, list_feeds
+from .paramfixing import gui_set_params as get_params_from_gui
 
 __version__ = "0.1.0"
 __author__ = "All the authors here" #FIXME
@@ -16,7 +17,7 @@ __license__ = "MIT"
 __all__ = ['TracktorServer', 'TracktorClient',
             'spawn_trserver', 'run_trserver', 'close_trserver',
             'spawn_trclient', 'run_trclient', 'close_trclient',
-            'list_feeds'
+            'list_feeds', 'get_params_from_gui'
             ]
 
 APP_NAME = "tracktorlive"

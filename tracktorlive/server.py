@@ -288,7 +288,7 @@ class TracktorServer:
         if self.vid_source_type == "cam":
             clockbuffer[-1] = time.time() - self.t_init
         else:
-            clockbuffer[-1] = frame_index
+            clockbuffer[-1] = frame_index/self.fps
 
         databuffer[:,:,-1] = -1.0
         if len(self.meas_now) > 0:
