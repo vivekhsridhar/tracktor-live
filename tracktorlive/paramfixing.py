@@ -1,3 +1,6 @@
+# Isaac Planas-Sitja, Pranav Minasandra and Vivek H Sridhar
+# 14 Apr 2025
+
 import os
 import re
 import argparse
@@ -5,8 +8,8 @@ import json
 import cv2
 import numpy as np
 
-from . import tracktor as tr
-
+# from . import tracktor as tr
+import tracktor as tr
 
 def parse_arguments():
     """
