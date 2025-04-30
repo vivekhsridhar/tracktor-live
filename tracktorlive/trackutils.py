@@ -12,23 +12,24 @@ from os.path import join as joinpath
 import cv2
 import numpy as np
 
-from . import tracktor as tr
+# from . import tracktor as tr
+import tracktor as tr
 
 class VideoEndedError(IOError):
     """Raised when a video has reached its end."""
     def __init__(self, message="The video has ended."):
         super().__init__(message)
 
-def get_vid(source, vidtype="cam"):
+def get_vid(source):
     """
     Gets a cv2.VideoCapture object from given source
     Args:
         source (int or str): filename or camera device number
-        vidtype (str, default "cam"): {"cam", "file"}
     Returns:
         cv2.VideoCapture object
     """
 
+    vidtype = "cam" if isinstance(source, int) else "file"
     cap = cv2.VideoCapture(source)
     assert cap.isOpened(), f"could not access source {vidtype}: {source}."
 
@@ -47,23 +48,37 @@ def get_frame(cap):
     ret, frame = cap.read()
     if not ret:
         raise VideoEndedError("frame could not be obtained")
-    frame_index = cap.get(1)
+    frame_index = cap.get(cv2.CAP_PROP_POS_FRAMES)
 
     return frame, frame_index
 
 
 def get_contours(frame, block_size,
-                    meas_last, meas_now,
-                    min_area, max_area,
-                    offset, scaling,
-                    fps=None,
-                    invert=True,
-                    draw_contours=False
-                ):
+                 meas_last, meas_now,
+                 min_area, max_area,
+                 offset, scaling,
+                 fps=None,
+                 invert=True,
+                 draw_contours=False):
     """
-    bla bla
+    Processes a video frame to detect object contours using thresholding and contour detection.
+
+    Args:
+        frame (np.ndarray): The current video frame.
+        block_size (int): Size of the neighborhood for adaptive thresholding. Must be odd.
+        meas_last (list): List of (x, y) coordinates from the previous frame.
+        meas_now (list): List of (x, y) coordinates detected in the current frame (to be updated).
+        min_area (int): Minimum area for a contour to be considered valid.
+        max_area (int): Maximum area for a contour to be considered valid.
+        offset (int): Offset value subtracted during adaptive thresholding.
+        scaling (float): Scale factor for resizing the input frame.
+        fps (float, optional): Frames per second, unused here but included for compatibility.
+        invert (bool, default=True): Whether to invert the thresholded image.
+        draw_contours (bool, default=False): Whether to draw detected contours on the frame.
+
+    Returns:
+        processed frame, list of contours, updated meas_last, updated meas_now
     """
-    # FIXME: write docstring
 
     del fps
     frame = cv2.resize(frame,
@@ -85,7 +100,7 @@ def get_contours(frame, block_size,
     return final, contours, meas_last, meas_now
     
 
-colours = [(255,255,255)]*10
+colours = [(0,0,255)]*10
 def cleanup_centroids(final, contours, n_inds,
                         meas_last, meas_now,
                         mot, frame_index,
@@ -93,19 +108,32 @@ def cleanup_centroids(final, contours, n_inds,
                         use_kmeans = True
                     ):#yeh mot kya hai?
     """
-    blablabla
+    Cleans up and associates detected centroids with tracked objects using k-means and the Hungarian algorithm.
+
+    Args:
+        final (np.ndarray): Frame on which to draw results.
+        contours (list): List of detected contours.
+        n_inds (int): Number of expected individuals to track.
+        meas_last (list): List of centroids from the previous frame.
+        meas_now (list): List of centroids from the current frame.
+        mot (bool): Whether to apply object tracking logic.
+        frame_index (int): Index of the current frame (used for labeling or logging).
+        draw_circles (bool, default=False): Whether to draw circles on tracked centroids.
+        use_kmeans (bool, default=True): Whether to apply k-means clustering when count mismatches.
+
+    Returns:
+        processed frame, updated meas_now with consistent ordering
     """
 
     if use_kmeans\
             and len(meas_now) != n_inds\
             and len(meas_now) > 0:
-# FIXME: write docstring
 
         contours, meas_now = tr.apply_k_means(contours, n_inds, meas_now)
 
     if len(meas_now) == len(meas_last) and len(meas_now) > 1:
         row_ind, col_ind = tr.hungarian_algorithm(meas_last, meas_now)
-        final, meas_now= tr.reorder_and_draw(final, colours, n_inds,
+        final, meas_now = tr.reorder_and_draw(final, colours, n_inds,
                                                     col_ind, meas_now, mot, 
                                                     frame_index,
                                                     draw_circles=draw_circles
@@ -115,6 +143,17 @@ def cleanup_centroids(final, contours, n_inds,
 
 
 def make_numpy_frame(meas_now, n_ind):
+    """
+    Converts a list of centroid coordinates to a NumPy array with fixed size, padding with NaNs if necessary.
+
+    Args:
+        meas_now (list): List of (x, y) centroids detected in the current frame.
+        n_ind (int): Expected number of tracked individuals.
+
+    Returns:
+        A (n_ind, 2) NumPy array with centroid positions. Unfilled rows are NaN-padded.
+    """
+
     n_available = len(meas_now)
     arr = np.ndarray((n_ind, 2), dtype=np.float64)
     arr[:,:] = np.nan
@@ -126,12 +165,14 @@ def make_numpy_frame(meas_now, n_ind):
 
 if __name__ == "__main__":
     print("Running toy tracker using these functions.")
-    vidfile = joinpath(config.DATA, "vids", "fish_video.mp4")
-    cap = get_vid(vidfile, vidtype="file")
-    fourcc = cv2.VideoWriter_fourcc(*'DIVX')
-    output_framesize = (int(cap.read()[1].shape[1]*1.0),
-                            int(cap.read()[1].shape[0]*1.0))
-    out = cv2.VideoWriter(filename = joinpath(config.DATA, "trial.mp4"),
+    video_directory = "/Users/vivekhsridhar/Library/Mobile Documents/com~apple~CloudDocs/Documents/Code/Python/OpenCV/tracktor"
+    
+    vidfile = joinpath(video_directory, "videos", "fish_video.mp4")
+    cap = get_vid(vidfile)
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    output_framesize = (int(cap.read()[1].shape[1]),
+                            int(cap.read()[1].shape[0]))
+    out = cv2.VideoWriter(filename = joinpath(video_directory, "output", "trial.mp4"),
                             fourcc = fourcc,
                             fps = 30.0,
                             frameSize = output_framesize,

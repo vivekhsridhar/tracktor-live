@@ -17,7 +17,6 @@ def parse_arguments():
     """
     parser = argparse.ArgumentParser(description="Video analysis and threshold tuning.")
 
-    parser.add_argument('-n', '--name', required=True, help='Name of the new video file after analysis')
     parser.add_argument('-c', '--camera', help='Camera device number')
     parser.add_argument('-f', '--file', help='Complete file path')
 
