@@ -11,6 +11,7 @@ import json
 import multiprocessing as mp
 import multiprocessing.shared_memory as mpshm
 from multiprocessing.managers import BaseManager
+
 import os
 from os.path import join as joinpath
 import pickle
@@ -23,11 +24,16 @@ import cv2
 import numpy as np
 
 import tracktorlive
-from . import memorymanagement as mmg
-from . import paramfixing
-from . import sync
-from . import trackutils
-from . import videoout
+# from . import memorymanagement as mmg
+# from . import paramfixing
+# from . import sync
+# from . import trackutils
+# from . import videoout
+import memorymanagement as mmg
+import paramfixing
+import sync
+import trackutils
+import videoout
 
 ADDR='127.0.0.1'
 class SyncManager(BaseManager): pass
@@ -35,7 +41,7 @@ SyncManager.register('get_semaphore')
 
 
 def _runforever(server):
-    cap = trackutils.get_vid(server.vidinput, vidtype=server.vid_source_type)
+    cap = trackutils.get_vid(server.vidinput)
     t_init = time.time()
     databuffer, clockbuffer = server.setup_shared_arrays()
 
@@ -409,7 +415,11 @@ def run_trserver(server, semm):
         close_trserver(server, semm)
 
 if __name__ == "__main__":
-    vidinput = "/home/pranav/Personal/Projects/temp/tracktorlive/Data/output.mp4"
+    mp.set_start_method('fork')
+
+    video_directory = "/Users/vivekhsridhar/Library/Mobile Documents/com~apple~CloudDocs/Documents/Code/Python/OpenCV/tracktor"
+
+    vidinput = joinpath(video_directory, "videos", "fish_video.mp4")
 #    vidinput = 0
     cap = cv2.VideoCapture(vidinput)
 
@@ -425,7 +435,6 @@ if __name__ == "__main__":
     server, semm = spawn_trserver(vidinput, trackparams,
                             n_ind=2, realtime=False, draw=True,
                             feed_id="trial")
-    
 
     run_trserver(server, semm)
     del server
