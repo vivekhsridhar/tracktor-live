@@ -128,7 +128,7 @@ def detect_and_draw_contours(frame, thresh, meas_last,
             contours = contours[:i] + contours[i+1:]
         else:
             if draw_contours:
-                cv2.drawContours(final, contours, i, (0,0,255), 1)
+                cv2.drawContours(final, contours, i, (0,0,255), 2)
             mom = cv2.moments(contours[i])
             if mom['m00'] != 0:
                 cx = mom['m10']/mom['m00']

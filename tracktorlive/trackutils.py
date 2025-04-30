@@ -12,8 +12,7 @@ from os.path import join as joinpath
 import cv2
 import numpy as np
 
-# from . import tracktor as tr
-import tracktor as tr
+from . import tracktor as tr
 
 class VideoEndedError(IOError):
     """Raised when a video has reached its end."""
@@ -142,31 +141,10 @@ def cleanup_centroids(final, contours, n_inds,
     return final, meas_now
 
 
-def make_numpy_frame(meas_now, n_ind):
-    """
-    Converts a list of centroid coordinates to a NumPy array with fixed size, padding with NaNs if necessary.
-
-    Args:
-        meas_now (list): List of (x, y) centroids detected in the current frame.
-        n_ind (int): Expected number of tracked individuals.
-
-    Returns:
-        A (n_ind, 2) NumPy array with centroid positions. Unfilled rows are NaN-padded.
-    """
-
-    n_available = len(meas_now)
-    arr = np.ndarray((n_ind, 2), dtype=np.float64)
-    arr[:,:] = np.nan
-    arr[:n_available, :] = meas_now
-    # assuming of course that n_available > n_ind
-
-    return arr
-
-
 if __name__ == "__main__":
     print("Running toy tracker using these functions.")
     video_directory = "/Users/vivekhsridhar/Library/Mobile Documents/com~apple~CloudDocs/Documents/Code/Python/OpenCV/tracktor"
-    
+
     vidfile = joinpath(video_directory, "videos", "fish_video.mp4")
     cap = get_vid(vidfile)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
