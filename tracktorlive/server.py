@@ -358,6 +358,7 @@ class TracktorServer:
             self.recout.close()
 
     def __del__(self):
+        os.remove(self.get_feed_filename())
         if self.running.value:
             self.stop()
             time.sleep(0.001)
@@ -376,7 +377,6 @@ class TracktorServer:
         except KeyError as e:
             print("An inexplicable, commonly occuring error occured upon server closure. ERR001")
 
-        os.remove(self.get_feed_filename())
 
 def spawn_trserver(vidinput, params, n_ind=1, **kwargs):
     port_num = random.choice(range(12000, 20000))
