@@ -51,7 +51,9 @@ Real-World Applications
 - Great for picking only interactions
 
 # Disclaimer:
-This project includes video excerpts from StarCraft: Brood War (1998), developed and published by Blizzard Entertainment, used here solely for academic, non-commercial demonstration purposes. All intellectual property rights to StarCraft remain with Blizzard Entertainment. No affiliation or endorsement is implied.
+This example includes a video excerpt from StarCraft: Brood War (1998), developed and published by Blizzard Entertainment,
+used here solely for academic, non-commercial demonstration purposes. All intellectual property rights to StarCraft remain with 
+Blizzard Entertainment. No affiliation or endorsement is implied.
 
 The footage is used under fair use provisions for research and educational display of proximity-based video chunking systems.
 
