@@ -66,5 +66,4 @@ def final_chunk(server):
         fname = f'chunk-{ulid.ULID()}.avi'
         server.dumpvideo(joinpath('ultralisks-chunked', fname))
 
-trl.run_trserver(server, semm)
-trl.wait_and_close_trserver(server, semm)
+trl.run_trsession(server, semm)

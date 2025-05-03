@@ -6,7 +6,7 @@ import multiprocessing as mp
 
 import cv2
 
-def vidout(frames, filename, fps, framesize):
+def vidout(frames, filename, fps, framesize, codec):
     """
     Writes a sequence of video frames to a video file using OpenCV.
 
@@ -19,7 +19,7 @@ def vidout(frames, filename, fps, framesize):
     Raises:
         AssertionError: If the video writer fails to open the file.
     """
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    fourcc = cv2.VideoWriter_fourcc(*codec)
     vidout = cv2.VideoWriter(
                             filename=filename,
                             fourcc = fourcc,
@@ -32,7 +32,7 @@ def vidout(frames, filename, fps, framesize):
         vidout.write(frame)
     vidout.release()
 
-def prl_vidout(frames, filename, fps, framesize):
+def prl_vidout(frames, filename, fps, framesize, codec):
     """
     Launches a parallel process to write video frames to a file using `vidout`.
 
@@ -41,10 +41,11 @@ def prl_vidout(frames, filename, fps, framesize):
         filename (str): Path to the output video file.
         fps (float): Frames per second for the output video.
         framesize (tuple): Size of the video frames as (width, height).
+        codec (str): e.g., XVID, DIVX, mp4v, etc.
 
     Notes:
         This function uses `multiprocessing` to offload the writing process,
         which can be useful to avoid blocking the main execution thread.
     """
-    proc = mp.Process(target=vidout, args=(frames, filename, fps, framesize))
+    proc = mp.Process(target=vidout, args=(frames, filename, fps, framesize, codec))
     proc.start()

@@ -24,6 +24,7 @@ import cv2
 import numpy as np
 
 import tracktorlive
+from . import client
 from . import memorymanagement as mmg
 from . import paramfixing
 from . import sync
@@ -59,6 +60,11 @@ def _runforever(server):
 
 
 class TracktorServer:
+    """
+    Handles video-based tracking of multiple individuals, managing frame-by-frame processing,
+    shared memory for data exchange, and optional recording and visualization.
+    """
+
     def __init__(self,
                     vidinput,
                     params,
@@ -75,7 +81,8 @@ class TracktorServer:
                     write_video=False
                 ):
         """
-        bla bla bla
+        Initializes the tracking server with video input, tracking parameters, and optional flags 
+        for recording and visualization.
         """
 
         if not feed_id:
@@ -165,24 +172,30 @@ class TracktorServer:
         return f"{self.__class__.__name__} object feed_id:{self.feed_id}"
 
     def startfunc(self, f):
+        """Registers a function to be called at start of tracking."""
+
         assert callable(f), f"decorate only functions."
         self.atstart[f.__name__] = f
         return f
 
     def __call__(self, f):
+        """Registers a per-frame processing function (called a 'cassette')."""
         assert callable(f), f"decorate only functions."
         self.casettes[f.__name__] = f
         return f
 
     def stopfunc(self, f):
+        """Registers a function to be called at stop of tracking."""
         assert callable(f), f"decorate only functions."
         self.atstop[f.__name__] = f
         return f
 
     def get_feed_filename(self):
+        """Returns the path of the metadata file representing this feed."""
         return joinpath(tracktorlive.FEEDS_DIR, f"tlfeed-{self.feed_id}")
 
     def create_feed_file(self):
+        """Creates a metadata file representing the current feed for client-side discovery."""
         feeddata = {
             "feed_id":      self.feed_id,
             "fps":          self.fps,
@@ -200,6 +213,7 @@ class TracktorServer:
             pickle.dump(feeddata, feedfile)
 
     def setup_shared_mems(self):
+        """Allocates shared memory blocks for tracking and timing data."""
         floatsize = np.dtype(np.float64).itemsize
         trackingdatashape = (self.n_ind, 2, int(self.fps*self.buffer_size))
         timedatashape = (int(self.fps*self.buffer_size), )
@@ -212,6 +226,7 @@ class TracktorServer:
         return datashm, clockshm
 
     def setup_shared_arrays(self):
+        """Wraps shared memory buffers in NumPy arrays and initializes them to NaN."""
         trackingdatashape = (self.n_ind, 2, int(self.fps*self.buffer_size))
         timedatashape = (int(self.fps*self.buffer_size), )
         databuffer = np.ndarray(trackingdatashape,
@@ -229,6 +244,7 @@ class TracktorServer:
         return databuffer, clockbuffer
 
     def get_data_and_clock(self):
+        """Returns a copy of the current data and clock buffers, with thread-safe access."""
         self.semaphore.acquire()
         data = self.databuffer.copy()
         clock = self.clockbuffer.copy()
@@ -237,6 +253,7 @@ class TracktorServer:
         return data, clock
 
     def get_clients(self):
+        """Returns a list of client files currently connected to this feed."""
         return glob.glob(
                 joinpath(tracktorlive.CLIENTS_DIR,
                             f"tlclient-{self.feed_id}-*"
@@ -244,7 +261,7 @@ class TracktorServer:
                 )
 
     def _eachframe(self, cap, databuffer, clockbuffer):#tracking happens here
-
+        """Processes a single frame: tracking, updating shared buffers, and optionally recording or drawing."""
         try:
             self.current_frame, self.frame_index = trackutils.get_frame(cap)
         except trackutils.VideoEndedError as e:
@@ -322,28 +339,32 @@ class TracktorServer:
             print(",".join(entry), file=self.recout, flush=True)
         self.semaphore.release()
 
-    def dumpvideo(self, outfile=None):
+    def dumpvideo(self, outfile=None, codec='XVID'):
+        """Writes recorded video frames to file, if recording was enabled."""
         if outfile is not None:
             self.semaphore.acquire()
             frcopy = self.recorded_frames.copy()
             self.semaphore.release()
 
-            videoout.prl_vidout(frcopy, outfile, self.fps, self.framesize)
+            videoout.prl_vidout(frcopy, outfile, self.fps, self.framesize, codec)
 
         self.recorded_frames = []
 
 #    def dumpdata(self, outfile=None):#FIXME
 
     def run(self):
+        """Starts the server in a background process and begins tracking."""
         self.t_init = time.time()
         self.running = mp.Value('b', True)
         self.serverproc = mp.Process(target=_runforever, args=(self,))
         self.serverproc.start()
 
     def timed_out(self):
+        """Returns True if tracking has exceeded the allowed timeout."""
         return time.time() - self.t_init > self.timeout
 
     def stop(self):
+        """Stops the server and signals stopping on all shared resources cleanly."""
         self.running.value = False
         #self.serverproc.terminate()
         self.serverproc.join()
@@ -359,27 +380,41 @@ class TracktorServer:
             self.recout.close()
 
     def __del__(self):
+        """Final cleanup of feed metadata and shared memory when the server object is deleted."""
         os.remove(self.get_feed_filename())
         if self.running.value:
             self.stop()
             time.sleep(0.001)
         self.datashm.close()
         self.clockshm.close()
-
+        for shm in (self.datashm, self.clockshm):
+            try:
+                shm.unlink()
+            except (FileNotFoundError, KeyError):
+                pass
         t_close = time.time()
         while len(self.get_clients()) > 0 and time.time() - t_close < 5.0:
             time.sleep(0.01)
             pass
-        try:
-            self.datashm.unlink()
-            self.clockshm.unlink()
-        except FileNotFoundError:
-            pass
-        except KeyError as e:
-            print("An inexplicable, commonly occuring error occured upon server closure. ERR001")
 
 
 def spawn_trserver(vidinput, params, n_ind=1, **kwargs):
+    """
+    Creates and returns a new TracktorServer and its semaphore manager.
+
+    Args:
+        vidinput (str or int): Path to video file or camera index.
+        params (dict): Tracking parameters.
+        n_ind (int): Number of individuals to track.
+        **kwargs: Additional arguments passed to TracktorServer.
+
+    Returns:
+        tuple: (TracktorServer instance, multiprocessing.Process managing the semaphore)
+
+    Raises:
+        ValueError: If the port number is already in use (via `sync.prl_sem_server`).
+    """
+
     port_num = random.choice(range(12000, 20000))
     semm = sync.prl_sem_server(port_num)
     server = TracktorServer(
@@ -392,15 +427,54 @@ def spawn_trserver(vidinput, params, n_ind=1, **kwargs):
     return server, semm
 
 def close_trserver(server, semm):
+    """
+    Stops the server and terminates the semaphore manager process.
+
+    Args:
+        server (TracktorServer): The server instance to stop.
+        semm (multiprocessing.Process): The semaphore manager process.
+
+    Returns:
+        None
+
+    Raises:
+        RuntimeError: If stopping the server or joining the semaphore fails.
+    """
+
     server.stop()
     semm.terminate()
     semm.join()
     semm.close()
 
 def run_trserver(server, semm):
+    """
+    Starts the server process for tracking.
+
+    Args:
+        server (TracktorServer): The server instance to run.
+        semm (process): semaphore manager process
+
+    Returns:
+        None
+    """
+
     server.run()
 
 def wait_and_close_trserver(server, semm):
+    """
+    Blocks until the server times out or is manually interrupted, then closes the server.
+
+    Args:
+        server (TracktorServer): The server instance.
+        semm (multiprocessing.Process): The semaphore manager process.
+
+    Returns:
+        None
+
+    Raises:
+        KeyboardInterrupt: If interrupted during waiting loop.
+    """
+
     try:
         while not server.timed_out() and server.running.value:
             time.sleep(0.002)
@@ -408,6 +482,50 @@ def wait_and_close_trserver(server, semm):
     except KeyboardInterrupt:
         print(f"Terminating server: {server.feed_id}")
     finally:
+        close_trserver(server, semm)
+
+def run_trsession(server, semm, clients=None):
+    """
+    Runs a TracktorServer and one or more TracktorClients concurrently, and
+    stops all processes cleanly on completion or interruption.
+
+    Args:
+        server (TracktorServer): The tracking server instance.
+        semm (multiprocessing.Process): The semaphore manager.
+        clients (TracktorClient or list[TracktorClient], optional): One or more clients connected to the server.
+
+    Returns:
+        None
+
+    Raises:
+        KeyboardInterrupt: If interrupted during execution.
+    """
+
+    if clients is None:
+        clients = []
+    elif isinstance(clients, client.TracktorClient):
+        clients = [clients]
+    try:
+        # Start server and all clients
+        run_trserver(server, semm)
+        for cl in clients:
+            client.run_trclient(cl)
+
+        # Wait until server finishes
+        while not server.timed_out() and server.running.value:
+            time.sleep(0.01)
+
+    except KeyboardInterrupt:
+        print(f"Interrupt received. Terminating server: {server.feed_id}")
+    finally:
+        # Stop clients
+        for cl in clients:
+            try:
+                cl.stop()
+            except Exception as e:
+                print(f"Error stopping client: {e}")
+
+        # Stop server and semaphore
         close_trserver(server, semm)
 
 

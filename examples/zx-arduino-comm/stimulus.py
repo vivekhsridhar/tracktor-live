@@ -37,9 +37,36 @@ def show(server):
     if server.framesbuffer[-1] is None:
         return None
     fr = server.framesbuffer[-1].copy()
+    fr2 = fr.copy()
     cv2.rectangle(fr, top_left, bottom_right, color, thickness=-1)
-    cv2.imshow('tracking', fr)
+    cv2.addWeighted(fr, 0.3, fr2, 0.7, 0, fr2)
+
+    cv2.imshow('tracking', fr2)
 
     cv2.waitKey(1)
 
-trl.run_trserver(server, semm)
+client = trl.spawn_trclient("mouseinthehouse")
+#ser = serial.Serial('/dev/ttyACM0')
+
+top = 50
+right = 300
+bottom = 200
+left = 150
+
+def _in_rect(locs, top=top, right=right, bottom=bottom, left=left):
+    return left < locs[0,0] < right and top < locs[0,1] < bottom
+
+@client
+def send_to_arduino(data, clock):
+    curr_loc = data[:,:,-1]
+    prev_loc = data[:,:,-2]
+
+    if _in_rect(curr_loc):# and not _in_rect(prev_loc):#mouse just moved into the rectangle
+#            ser.write(b'm')
+            print("hi", end="\033[K\r")
+    else:
+            print("hello", end="\033[K\r")
+
+trl.run_trsession(server, semm, client)
+del client
+del server

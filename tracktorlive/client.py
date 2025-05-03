@@ -26,7 +26,7 @@ from . import sync
 class SyncManager(BaseManager): pass
 SyncManager.register('get_semaphore')
 
-def runforever(obj):
+def _runforever(obj):
     while obj.running.value:
         try:
             time.sleep(obj.run_interval) #to not overload everything
@@ -43,8 +43,16 @@ class TracktorClient:
 
     def __init__(self, feed_id, run_interval=None):
         """
-        initialises a TracktorClient object.
+        Initialises a TracktorClient that connects to an existing tracking server.
+
         Args:
+            feed_id (str): Unique ID of the server feed to connect to.
+            run_interval (float, optional): Time (in seconds) between successive calls 
+                to registered functions. Defaults to 0.005s.
+
+        Raises:
+            FileNotFoundError: If the specified feed metadata file does not exist.
+            ConnectionRefusedError: If the server cannot be contacted.
         """
 
         self.feed_id = feed_id
@@ -139,7 +147,7 @@ class TracktorClient:
         Runs all registered functions at specified run interval.
         """
         self.running = mp.Value('b', True)
-        self.clientproc = mp.Process(target=runforever, args=(self,))
+        self.clientproc = mp.Process(target=_runforever, args=(self,))
         self.clientproc.start()
 
     def stop(self):
@@ -155,23 +163,74 @@ class TracktorClient:
     def __del__(self):
         if self.running.value:
             self.stop()
-        self.datashm.close()
-        self.clockshm.close()
         if os.path.exists(self.clientfile):
             os.remove(self.clientfile)
+        self.datashm.close()
+        self.clockshm.close()
 
 def list_feeds():
+    """
+    Returns a list of all available feed metadata files.
+
+    Returns:
+        list[str]: List of paths to active feed files.
+    """
+
     return glob.glob(joinpath(tracktorlive.FEEDS_DIR, "tlfeed-*"))
 
 def spawn_trclient(feed_id, run_interval=0.005):
+    """
+    Creates and returns a new TracktorClient instance.
+
+    Args:
+        feed_id (str): Feed ID of the server to connect to.
+        run_interval (float): Interval between iterations in seconds.
+
+    Returns:
+        TracktorClient: The initialized client.
+    """
+
     return TracktorClient(feed_id, run_interval)
 
 def close_trclient(client):
+    """
+    Stops the client and cleans up any associated resources.
+
+    Args:
+        client (TracktorClient): The client instance to stop.
+
+    Returns:
+        None
+    """
+
     client.stop()
 
 def run_trclient(client):
+    """
+    Starts the client process for data polling and function execution.
+
+    Args:
+        client (TracktorClient): The client instance to run.
+
+    Returns:
+        None
+    """
+    client.run()
+
+def wait_and_close_trclient(client):
+    """
+    Waits for the client to finish or be interrupted, then closes it.
+
+    Args:
+        client (TracktorClient): The client instance to close.
+
+    Returns:
+        None
+
+    Raises:
+        KeyboardInterrupt: If interrupted during waiting loop.
+    """
     try:
-        client.run()
         while client.running.value:
             time.sleep(0.2)
     except KeyboardInterrupt:
