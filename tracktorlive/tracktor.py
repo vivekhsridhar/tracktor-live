@@ -166,12 +166,13 @@ def apply_k_means(contours, n_inds, meas_now):
     """
     del meas_now[:]
     # Clustering contours to separate individuals
-    myarray = np.vstack(contours)
-    myarray = myarray.reshape(myarray.shape[0], myarray.shape[2])
+#    myarray = np.vstack(contours)
+#    myarray = myarray.reshape(myarray.shape[0], myarray.shape[2])
+    myarray = np.concatenate(contours, axis=0).reshape(-1, 2)
 
     kmeans = KMeans(n_clusters=n_inds,
                         random_state=0,
-                        n_init = 50
+                        n_init = 'auto'
                     ).fit(myarray)
     l = len(kmeans.cluster_centers_)
 

@@ -24,16 +24,11 @@ import cv2
 import numpy as np
 
 import tracktorlive
-# from . import memorymanagement as mmg
-# from . import paramfixing
-# from . import sync
-# from . import trackutils
-# from . import videoout
-import memorymanagement as mmg
-import paramfixing
-import sync
-import trackutils
-import videoout
+from . import memorymanagement as mmg
+from . import paramfixing
+from . import sync
+from . import trackutils
+from . import videoout
 
 ADDR='127.0.0.1'
 class SyncManager(BaseManager): pass
@@ -130,8 +125,8 @@ class TracktorServer:
 
         self.meas_last = [[0, 0] for j in range(self.n_ind)]
         self.meas_now = [[0, 0] for j in range(self.n_ind)]
-        self.meas_last = self.resmanager.list(self.meas_last)
-        self.meas_now = self.resmanager.list(self.meas_now)
+#        self.meas_last = self.resmanager.list(self.meas_last)
+#        self.meas_now = self.resmanager.list(self.meas_now)
 
         self.recorded_frames = [] 
         self.recorded_points = [] 
@@ -251,7 +246,7 @@ class TracktorServer:
     def _eachframe(self, cap, databuffer, clockbuffer):#tracking happens here
 
         try:
-            self.current_frame, frame_index = trackutils.get_frame(cap)
+            self.current_frame, self.frame_index = trackutils.get_frame(cap)
         except trackutils.VideoEndedError as e:
             if self.vid_source_type == "file":
                 # file completed
@@ -281,7 +276,7 @@ class TracktorServer:
                                     meas_last=self.meas_last,
                                     meas_now=self.meas_now,
                                     mot=True,#FIXME
-                                    frame_index=frame_index,
+                                    frame_index=self.frame_index,
                                     draw_circles=self.draw,
                                     use_kmeans=True
                                 )
@@ -294,7 +289,7 @@ class TracktorServer:
         if self.vid_source_type == "cam":
             clockbuffer[-1] = time.time() - self.t_init
         else:
-            clockbuffer[-1] = frame_index/self.fps
+            clockbuffer[-1] = self.frame_index/self.fps
 
         databuffer[:,:,-1] = -1.0
         if len(self.meas_now) > 0:
@@ -306,7 +301,7 @@ class TracktorServer:
             if len(self.recorded_frames) == 0:
                 self.recorded_frames.extend([fr for fr in self.framesbuffer if fr is not None])
             else:
-                self.recorded_frames.append(self.framesbuffer[-1])
+                self.recorded_frames.append(self.current_frame)
 
         if self.keep_recordings.value:
             if len(self.recorded_points) == 0:
@@ -403,16 +398,18 @@ def close_trserver(server, semm):
     semm.close()
 
 def run_trserver(server, semm):
-    try:
-        server.run()
+    server.run()
 
-        tnow = time.time()
+def wait_and_close_trserver(server, semm):
+    try:
         while not server.timed_out() and server.running.value:
-            time.sleep(0.2)
+            time.sleep(0.002)
+
     except KeyboardInterrupt:
         print(f"Terminating server: {server.feed_id}")
     finally:
         close_trserver(server, semm)
+
 
 if __name__ == "__main__":
     mp.set_start_method('fork')
@@ -437,4 +434,5 @@ if __name__ == "__main__":
                             feed_id="trial")
 
     run_trserver(server, semm)
+    wait_and_close_trserver(server, semm)
     del server

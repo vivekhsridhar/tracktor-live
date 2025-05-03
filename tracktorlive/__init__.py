@@ -6,7 +6,7 @@ import os
 from os.path import join as joinpath
 import platformdirs as pfd
 
-from .server import TracktorServer, spawn_trserver, run_trserver, close_trserver
+from .server import TracktorServer, spawn_trserver, run_trserver, close_trserver, wait_and_close_trserver
 from .client import TracktorClient, spawn_trclient, run_trclient, close_trclient, list_feeds
 from .paramfixing import gui_set_params as get_params_from_gui
 

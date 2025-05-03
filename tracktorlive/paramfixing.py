@@ -8,8 +8,7 @@ import json
 import cv2
 import numpy as np
 
-# from . import tracktor as tr
-import tracktor as tr
+from . import tracktor as tr
 
 def parse_arguments():
     """
