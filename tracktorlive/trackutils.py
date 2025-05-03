@@ -137,7 +137,6 @@ def cleanup_centroids(final, contours, n_inds,
                                                     frame_index,
                                                     draw_circles=draw_circles
                                                 )
-
     return final, meas_now
 
 

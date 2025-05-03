@@ -67,3 +67,4 @@ def final_chunk(server):
         server.dumpvideo(joinpath('ultralisks-chunked', fname))
 
 trl.run_trserver(server, semm)
+trl.wait_and_close_trserver(server, semm)
