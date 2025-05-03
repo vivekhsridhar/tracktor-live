@@ -68,7 +68,7 @@ def printloc(data, clock):
     print(clock[-1], ":", pos)
     
 
-run_trsession(server, semm)
+run_trsession(server, semm, client)
 ```
 
 🧪 Real-world Use Cases
