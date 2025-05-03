@@ -1,52 +1,87 @@
-Proximity-Based Video Chunking
-==============================
+TracktorLive
+============
 
-This example demonstrates how to capture short video segments only when
-tracked individuals come within a specified distance of each other. It
-is useful in scenarios where interactions are rare and continuous
-recording would be wasteful.
+**TracktorLive** is a real-time video tracking and data serving
+framework designed for lightweight, scriptable tracking of individual
+animals in behavioral experiments. It
+provides programmatic hooks for processing and chunking tracked data
+on-the-fly, with minimal boilerplate.
 
-Purpose
--------
+------------------------------------------------------------------------
 
-The system monitors position data extracted from video input and
-automatically saves short clips to disk when any two individuals are
-close together. This allows for real-time filtering and efficient
-storage of only behaviorally relevant video.
+✨ Features
+----------
 
-How It Works
-------------
+-   Real-time tracking of 1 or more individuals from real-time camera feed or pre-recorded video
+    sources
+-   Buffered data sharing via shared memory (suitable for high-speed
+    use)
+-   Modular "cassette" system for on-the-fly processing
+-   Built-in support for:
+    -   Data streaming to external clients
+    -   Live or on-demand video and data recording
+-   A number of useful example scripts and a growing library of server- and
+    client-side casettes
+-   Minimal heavy external dependencies (NumPy, OpenCV, Scikit-Learn)
 
-1.  A video is analyzed frame by frame using real-time tracking.
-2.  A user-defined function periodically checks the distance between
-    individuals.
-3.  When the distance falls below a configurable threshold, recording is
-    enabled. When they move apart, recording stops and the saved frames
-    are written to a file.
-4.  At the end of the input (if using video), a final check ensures any
-    remaining recording is saved.
+------------------------------------------------------------------------
 
-Output
-------
+🧠 Concept
+---------
 
-Chunks are saved into the `ultralisks-chunked/` directory as individual
-video files. Each file corresponds to a brief period of close proximity.
+TracktorLive works on a **server--client model**, where:
 
-Usage
------
+-   A **server** processes a video stream and maintains a shared data
+    buffer with clock and tracked locations.
+-   One or more **clients** can connect and access this data in real
+    time.
+-   Small, user-defined functions ("cassettes") can be registered to run
+    every frame or at server shutdown.
+-   This way, all tracking and multiprocessing happens in the background
+    allowing users without computer vision experience to directly get involved
+    with such experimental setups.
 
-Place your input video (e.g. `ultralisks.mp4`) and tracking parameter
-file (e.g. `brood-war-params.json`) in the working directory. Then run:
+All interaction is via helper functions like `spawn_trserver`,
+`run_trsession`, and decorators like `@server`, `@server.stopfunc`.
 
-    python chunker.py
+------------------------------------------------------------------------
 
-You can adjust the distance threshold and output directory within the
-script.
+📦 Installation
+--------------
 
-Real-World Applications
------------------------
+Coming soon.
 
-- Performing more advanced video analyses on chunks can be faster than the
-  alternative
-- Great for picking only interactions
+------------------------------------------------------------------------
 
+🔁 Example: Print current location of animal
+---------------------------------------------
+
+```python
+import tracktorlive as trl
+
+server, semm = trl.spawn_trserver("video.mp4", params, n_ind=1, buffer_size=1, realtime=False)
+client = trl.spawn_trclient(server.feed_id)
+
+@client
+def printloc(data, clock):
+    pos = data[0,:,-1]
+    print(clock[-1], ":", pos)
+    
+
+run_trsession(server, semm)
+```
+
+🧪 Real-world Use Cases
+----------------------
+
+- thode examples likhenge
+
+
+📬 Status
+--------
+
+TracktorLive is a practical, evolving toolkit. APIs may change. You're
+encouraged to adapt parts for your own research or build wrappers that
+suit your workflow.
+
+For questions or bugs, feel free to open an issue or reach out directly.
