@@ -7,6 +7,17 @@ animals in behavioral experiments. It
 provides programmatic hooks for processing and chunking tracked data
 on-the-fly, with minimal boilerplate.
 
+The video tracking used in this project emerges from Tracktor::
+
+**Sridhar, V. H., Roche, D. G., & Gingins, S. (2019).**
+_Tracktor: Image-based automated tracking of animal movement and behaviour._
+Methods in Ecology and Evolution, 10(6), 815–820.
+DOI:[10.1111/2041-210X.13166"](https://doi.org/10.1111/2041-210X.13166)
+
+TracktorLive builds on that work, enabling real-time
+tracking, memory sharing, and programmatic control for live applications related
+to behavior pipelines.
+
 ------------------------------------------------------------------------
 
 ✨ Features
