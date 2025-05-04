@@ -12,7 +12,7 @@ from os.path import join as joinpath
 import cv2
 import numpy as np
 
-from . import tracktor as tr
+import tracktor as tr
 
 class VideoEndedError(IOError):
     """Raised when a video has reached its end."""

@@ -1,6 +1,8 @@
 import json
+import multiprocessing as mp
 from os.path import join as joinpath
 import os
+mp.set_start_method('fork')
 
 import cv2
 import numpy as np
@@ -37,7 +39,7 @@ def add_mask(server):
     cv2.circle(mask, (mask.shape[1]//2 + mask_offset_x, mask.shape[0]//2 + mask_offset_y), 520, 255, -1)
     frame[mask == 0] = 0
 
-#@server
+# @server
 def show(server):
     fr = server.framesbuffer[-1]
     if fr is None:
@@ -53,8 +55,12 @@ def crop_to_center(server):
     if np.any(np.isnan(pos)):
         return
 
+    print(pos)
+
     if np.any(pos < 0):
         return
+
+    print('setting x,y')
 
     x, y = int(pos[0]), int(pos[1])
     frame = server.framesbuffer[-1]
@@ -69,6 +75,8 @@ def crop_to_center(server):
     x1 = max(x2 - CROP_WIDTH, 0)
     y1 = max(y2 - CROP_HEIGHT, 0)
 
+    print('cropping')
+
     crop = frame[y1:y2, x1:x2]
     if crop.shape[:2] != (CROP_HEIGHT, CROP_WIDTH):
         return
@@ -79,12 +87,14 @@ def crop_to_center(server):
         server.crop_writer = cv2.VideoWriter(outpath, fourcc, server.fps, (CROP_WIDTH, CROP_HEIGHT))
 
     server.crop_writer.write(crop)
+    print('wrote a frame')
 
 @server.stopfunc
 def close_crop_writer(server):
     if hasattr(server, "crop_writer") and server.crop_writer is not None:
         server.crop_writer.release()
         server.crop_writer = None
+        print('released')
 
 trl.run_trsession(server, semm)
 

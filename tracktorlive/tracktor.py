@@ -105,7 +105,13 @@ def detect_and_draw_contours(frame, thresh, meas_last,
     """
 
     # Detect contours and draw them based on specified area thresholds
-    contours, _ = cv2.findContours(thresh.copy(),
+    if int(cv2.__version__[0]) == 3:
+        _, contours, _ = cv2.findContours(thresh.copy(),
+                                                    cv2.RETR_TREE,
+                                                    cv2.CHAIN_APPROX_SIMPLE
+                                                )
+    else:
+        contours, _ = cv2.findContours(thresh.copy(),
                                                     cv2.RETR_TREE,
                                                     cv2.CHAIN_APPROX_SIMPLE
                                                 )
@@ -113,8 +119,7 @@ def detect_and_draw_contours(frame, thresh, meas_last,
     final = frame.copy()
 
     i = 0
-
-    if meas_last and meas_now:
+    if meas_last is not None:
         meas_last = meas_now[:]
         del meas_now[:]
 
@@ -128,7 +133,7 @@ def detect_and_draw_contours(frame, thresh, meas_last,
                 cx = mom['m10']/mom['m00']
                 cy = mom['m01']/mom['m00']
 
-            if meas_last and meas_now:
+            if meas_last is not None:
                 meas_now.append([cx,cy])
             i += 1
         else:

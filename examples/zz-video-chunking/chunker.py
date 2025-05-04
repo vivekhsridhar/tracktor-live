@@ -8,6 +8,7 @@ import os
 from os.path import join as joinpath
 mp.set_start_method('fork')
 
+import cv2
 import json
 import numpy as np
 import ulid
@@ -23,6 +24,9 @@ import tracktorlive as trl
 # animal interactions.
 
 # First, let's load the parameters.
+# cap = cv2.VideoCapture('ultralisks.mp4')
+# params = trl.get_params_from_gui(cap, 'file', write_file=True)
+# cap.release()
 with open("brood-war-params.json") as f:
     params = json.load(f)
 params["fps"] = 30.0
