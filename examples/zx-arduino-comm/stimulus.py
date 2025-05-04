@@ -11,8 +11,21 @@ import multiprocessing as mp
 mp.set_start_method('fork')
 
 import cv2
+import serial
+import serial.tools.list_ports
 
 import tracktorlive as trl
+
+
+def find_arduino_port():
+    ports = serial.tools.list_ports.comports()
+    for port in ports:
+        desc = port.description.lower()
+        manu = (port.manufacturer or "").lower()
+        if 'arduino' in desc or 'arduino' in manu:
+            return port.device
+    raise RuntimeError('No arduino device could be found')
+
 
 with open("mouse-params.json") as f:
     params = json.load(f)
@@ -48,7 +61,9 @@ def show(server):
     cv2.waitKey(1)
 
 client = trl.spawn_trclient("mouseinthehouse")
-#ser = serial.Serial('/dev/ttyACM0')
+
+port = find_arduino_port()
+ser = serial.Serial(port, 9600, timeout=1)
 
 top = 50
 right = 300
@@ -63,11 +78,8 @@ def send_to_arduino(data, clock):
     curr_loc = data[:,:,-1]
     prev_loc = data[:,:,-2]
 
-    if _in_rect(curr_loc):# and not _in_rect(prev_loc):#mouse just moved into the rectangle
-#            ser.write(b'm')
-            print("hi", end="\033[K\r")
-    else:
-            print("hello", end="\033[K\r")
+    if _in_rect(curr_loc) and not _in_rect(prev_loc):#mouse just moved into the rectangle
+           ser.write(b'm')
 
 trl.run_trsession(server, semm, client)
 del client
