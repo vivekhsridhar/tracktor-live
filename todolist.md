@@ -17,4 +17,6 @@
   brought to beginning
 - [ ] paramfixing.py: write_file change from bool to str, and if it is None,
   sensibly get a new name.
-- [ ]  video file-format and codec handling in write_video and dumpvideo
+- [ ] video file-format and codec handling in write_video and dumpvideo
+- [ ] handle invert variable value (defaults to 51)
+- [ ] paramfixing using trackutils instead of cv2 functions
