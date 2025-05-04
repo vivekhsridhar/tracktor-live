@@ -8,7 +8,7 @@ import json
 import cv2
 import numpy as np
 
-import trackutils as tru
+from . import trackutils as tru
 
 def parse_arguments():
     """
