@@ -14,22 +14,21 @@ os.makedirs(CROPPED_DIR, exist_ok=True)
 
 with open("termite-params.json") as f:
     params = json.load(f)
-params["fps"] = 30
-print(params)
+params["fps"] = 60
 
 server, semm = trl.spawn_trserver(
                 "termite_video.mp4",
                 params,
                 n_ind=8,
-                feed_id="fish_video",
+                feed_id="termite_video",
                 realtime=False,
-                draw=True
+                draw=False
 )
 
 mask_offset_x = -18
 mask_offset_y = -5
 
-#@server
+@server
 def add_mask(server):
     frame = server.current_frame
     if frame is None:
@@ -49,8 +48,7 @@ def show(server):
 @server
 def crop_to_center(server):
     data, _ = server.get_data_and_clock()
-    pos = data[0, :, -1]
-    print(pos)
+    pos = data[4, :, -1]
 
     if np.any(np.isnan(pos)):
         return
@@ -59,7 +57,9 @@ def crop_to_center(server):
         return
 
     x, y = int(pos[0]), int(pos[1])
-    frame = server.current_frame
+    frame = server.framesbuffer[-1]
+    if frame is None:
+        return
     h, w = frame.shape[:2]
 
     x1 = max(x - CROP_WIDTH // 2, 0)

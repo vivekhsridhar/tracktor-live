@@ -55,7 +55,7 @@ def process_image(image, block_size, offset, min_blob_size, max_blob_size, inver
                                  offset=offset, blur=False, invert=bool(invert))
 
     # Find external contours
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
     for contour in contours:
         area = cv2.contourArea(contour)
