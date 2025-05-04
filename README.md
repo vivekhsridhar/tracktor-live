@@ -33,7 +33,7 @@ to behavior pipelines.
     -   Live or on-demand video and data recording
 -   A number of useful example scripts and a growing library of server- and
     client-side casettes
--   Minimal heavy external dependencies (NumPy, OpenCV, Scikit-Learn)
+-   Minimal external dependencies (NumPy, OpenCV, Scikit-Learn etc.)
 
 ------------------------------------------------------------------------
 
