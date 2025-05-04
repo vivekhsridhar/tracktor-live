@@ -32,6 +32,7 @@ with open("brood-war-params.json") as f:
 params["fps"] = 30.0
 
 THRESH_APPROACH_DIST = 300 #px
+THRESH_APPROACH_DIST2 = THRESH_APPROACH_DIST**2 #px**2
 os.makedirs("ultralisks-chunked", exist_ok=True)
 
 server, semm = trl.spawn_trserver("./ultralisks.mp4",
@@ -51,11 +52,11 @@ def chunking(server):
         # we don't know the location of some individuals
         return None
 
-    dist = np.sqrt(((curr_vals[0,:] - curr_vals[1,:])**2).sum())
-    if dist <= THRESH_APPROACH_DIST:
+    dist2 = ((curr_vals[0,:] - curr_vals[1,:])**2).sum()
+    if dist2 <= THRESH_APPROACH_DIST2:
         if len(server.recorded_frames) == 0:#nothing stored yet?
             server.keep_video.value = True
-    elif dist > THRESH_APPROACH_DIST:
+    elif dist2 > THRESH_APPROACH_DIST2:
         if len(server.recorded_frames) > 0:
             server.keep_video.value=False
             fname = f'chunk-{ulid.ULID()}.avi'
