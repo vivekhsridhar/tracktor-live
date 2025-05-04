@@ -292,7 +292,7 @@ class TracktorServer:
                                     n_inds=self.n_ind,
                                     meas_last=self.meas_last,
                                     meas_now=self.meas_now,
-                                    mot=True,#FIXME
+                                    mot=False,#FIXME
                                     frame_index=self.frame_index,
                                     draw_circles=self.draw,
                                     use_kmeans=True

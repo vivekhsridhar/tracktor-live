@@ -276,7 +276,8 @@ def reorder_and_draw(final, colours, n_inds,
     # Draw centroids
     if not mot:
         for i in range(len(meas_now)):
-            if colours[i%4] == (0,0,255) and draw_circles:
+            #if colours[i%4] == (0,0,255) and draw_circles:
+            if draw_circles:
                 cv2.circle(final, tuple((int(x) for x in meas_now[i])),
                                                             5,
                                                             colours[i%4],

@@ -130,7 +130,8 @@ def cleanup_centroids(final, contours, n_inds,
 
         contours, meas_now = tr.apply_k_means(contours, n_inds, meas_now)
 
-    if len(meas_now) == len(meas_last) and len(meas_now) > 1:
+    #if len(meas_now) == len(meas_last) and len(meas_now) > 1:
+    if len(meas_now) > 0 and len(meas_last) > 0:
         row_ind, col_ind = tr.hungarian_algorithm(meas_last, meas_now)
         final, meas_now = tr.reorder_and_draw(final, colours, n_inds,
                                                     col_ind, meas_now, mot, 
