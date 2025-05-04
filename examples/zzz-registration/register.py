@@ -60,8 +60,6 @@ def crop_to_center(server):
     if np.any(pos < 0):
         return
 
-    print('setting x,y')
-
     x, y = int(pos[0]), int(pos[1])
     frame = server.framesbuffer[-1]
     if frame is None:
@@ -75,8 +73,6 @@ def crop_to_center(server):
     x1 = max(x2 - CROP_WIDTH, 0)
     y1 = max(y2 - CROP_HEIGHT, 0)
 
-    print('cropping')
-
     crop = frame[y1:y2, x1:x2]
     if crop.shape[:2] != (CROP_HEIGHT, CROP_WIDTH):
         return
@@ -87,7 +83,6 @@ def crop_to_center(server):
         server.crop_writer = cv2.VideoWriter(outpath, fourcc, server.fps, (CROP_WIDTH, CROP_HEIGHT))
 
     server.crop_writer.write(crop)
-    print('wrote a frame')
 
 @server.stopfunc
 def close_crop_writer(server):
