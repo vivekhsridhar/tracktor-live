@@ -12,7 +12,8 @@ from os.path import join as joinpath
 import cv2
 import numpy as np
 
-from . import tracktor as tr
+# from . import tracktor as tr
+import tracktor as tr
 
 class VideoEndedError(IOError):
     """Raised when a video has reached its end."""
@@ -126,7 +127,8 @@ def cleanup_centroids(final, contours, n_inds,
 
     if use_kmeans\
             and len(meas_now) != n_inds\
-            and len(meas_now) > 0:
+            and len(meas_now) > 0\
+            and n_inds > 1:
 
         contours, meas_now = tr.apply_k_means(contours, n_inds, meas_now)
 
