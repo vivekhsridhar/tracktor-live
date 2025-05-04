@@ -375,7 +375,7 @@ left of the screen.
 
 ## Learning more
 
-racktorLive includes a set of example scripts that demonstrate common use cases.
+TracktorLive includes a set of example scripts that demonstrate common use cases.
 These are a great starting point if you're not sure how to structure your logic.
 
 You'll find them in the `examples/` folder on our GitHub repository.
