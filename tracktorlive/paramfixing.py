@@ -51,28 +51,13 @@ def process_image(image, block_size, offset, min_blob_size, max_blob_size, inver
     block_size = max(3, block_size | 1)  # Ensure block size is odd
 
     # Generate binary mask
-    thresh = tru.get_contours(current_image, block_size=block_size, meas_last=None, meas_now=None, 
-                                min_area=None, max_area=None, offset=offset, scaling=1.0, 
-                                fps=None, invert=True, draw_contours=True)
+    processed_image, contours, meas_last, meas_now = tru.get_contours(current_image, block_size=block_size, 
+                                                                    meas_last=None, meas_now=None, 
+                                                                    min_area=min_blob_size, max_area=max_blob_size, 
+                                                                    offset=offset, scaling=1.0, 
+                                                                    fps=None, invert=True, draw_contours=True)
 
-    colour_to_thresh(current_image, block_size=block_size,
-                                 offset=offset, blur=False, invert=bool(invert))
-
-    # Find external contours
-    contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-    for contour in contours:
-        area = cv2.contourArea(contour)
-        if min_blob_size < area < max_blob_size:
-            cv2.drawContours(current_image, [contour], -1, (0, 0, 255), 2)
-            moments = cv2.moments(contour)
-            if moments["m00"]:
-                cx = int(moments["m10"] / moments["m00"])
-                cy = int(moments["m01"] / moments["m00"])
-                cv2.putText(current_image, f'{int(area)}', (cx - 20, cy),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-
-    cv2.imshow('Threshold Image', current_image)
+    cv2.imshow('Threshold Image', processed_image)
 
 
 def update_params_file(block_size, offset, min_blob_size, max_blob_size, invert, 
@@ -153,7 +138,7 @@ def gui_set_params(cap,
                 frame, frame_index = tru.get_frame(cap)
             except:
                 print("Video complete")
-            cv2.setTrackbarPos('Seek', 'Tracking Parameters', frame_index)
+            cv2.setTrackbarPos('Seek', 'Tracking Parameters', int(frame_index))
 
         else:
             # If paused and user moves the trackbar, fetch frame at that index

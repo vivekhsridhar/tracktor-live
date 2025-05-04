@@ -103,33 +103,30 @@ def detect_and_draw_contours(frame, thresh, meas_last,
     meas_now: array_like, dtype=float
         individual's location on current frame
     """
+
     # Detect contours and draw them based on specified area thresholds
     contours, _ = cv2.findContours(thresh.copy(),
                                                     cv2.RETR_TREE,
                                                     cv2.CHAIN_APPROX_SIMPLE
                                                 )
 
-    # img = cv2.cvtColor(thresh.copy(), cv2.COLOR_GRAY2BGR)
-    # NOTE: diagnose above line
     final = frame.copy()
 
     i = 0
+
     if meas_last and meas_now:
         meas_last = meas_now[:]
         del meas_now[:]
 
     while i < len(contours):
         area = cv2.contourArea(contours[i])
-        if min_blob_size < area < max_blob_size:
+        if min_area < area < max_area:
             if draw_contours:
                 cv2.drawContours(final, contours, i, (0,0,255), 2)
-            moments = cv2.moments(contours[i])
-            if moments['m00']:
-                cx = moments['m10']/moments['m00']
-                cy = moments['m01']/moments['m00']
-            else:
-                cx = 0
-                cy = 0
+            mom = cv2.moments(contours[i])
+            if mom['m00']:
+                cx = mom['m10']/mom['m00']
+                cy = mom['m01']/mom['m00']
 
             if meas_last and meas_now:
                 meas_now.append([cx,cy])
