@@ -99,7 +99,7 @@ def get_contours(frame, block_size,
     return final, contours, meas_last, meas_now
     
 
-colours = [(0,0,255)]*10
+colours = [(0,0,255), (0,255,0), (255,0,0), (255,0,255), (0,255,255), (255,255,0), (0,0,0), (255,255,255)]*10
 def cleanup_centroids(final, contours, n_inds,
                         meas_last, meas_now,
                         mot, frame_index,

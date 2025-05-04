@@ -35,53 +35,6 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def extract_first_frame_from_file(path):
-    """
-    Extracts and saves the first frame from a video file.
-    
-    Args:
-        path (str): Path to the video file.
-    """
-    cap = cv2.VideoCapture(path)
-    if not cap.isOpened():
-        raise IOError("Could not open video file.")
-    ret, frame = cap.read()
-    cap.release()
-    if not ret:
-        raise IOError("Could not read frame from video file.")
-    cv2.imwrite('first_frame.jpg', frame)
-    print("First frame saved as 'first_frame.jpg'")
-
-
-def extract_first_frame_from_camera(device_index):
-    """
-    Captures a frame from a live camera feed and saves it.
-    
-    Args:
-        device_index (int): Index of the camera device.
-    """
-    cap = cv2.VideoCapture(device_index)
-    if not cap.isOpened():
-        raise IOError("Cannot open camera.")
-
-    print("Press 'q' or ESC to quit preview early.")
-    frame_count = 0
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        cv2.imshow('Live Feed', frame)
-        frame_count += 1
-        key = cv2.waitKey(1) & 0xFF
-        if frame_count == 100 or key in [27, ord('q')]:
-            cv2.imwrite('first_frame.jpg', frame)
-            print("First frame saved as 'first_frame.jpg'")
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
-
-
 def process_image(image, block_size, offset, min_blob_size, max_blob_size, invert):
     """
     Processes an image using adaptive thresholding and contour detection.
