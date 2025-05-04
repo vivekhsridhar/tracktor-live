@@ -104,13 +104,7 @@ def detect_and_draw_contours(frame, thresh, meas_last,
         individual's location on current frame
     """
     # Detect contours and draw them based on specified area thresholds
-    if int(cv2.__version__[0]) == 3:
-        _, contours, _ = cv2.findContours(thresh.copy(),
-                                                    cv2.RETR_TREE,
-                                                    cv2.CHAIN_APPROX_SIMPLE
-                                                )
-    else:
-        contours, _ = cv2.findContours(thresh.copy(),
+    contours, _ = cv2.findContours(thresh.copy(),
                                                     cv2.RETR_TREE,
                                                     cv2.CHAIN_APPROX_SIMPLE
                                                 )
@@ -120,24 +114,29 @@ def detect_and_draw_contours(frame, thresh, meas_last,
     final = frame.copy()
 
     i = 0
-    meas_last = meas_now[:]
-    del meas_now[:]
+    if meas_last and meas_now:
+        meas_last = meas_now[:]
+        del meas_now[:]
+
     while i < len(contours):
         area = cv2.contourArea(contours[i])
-        if area < min_area or area > max_area:
-            contours = contours[:i] + contours[i+1:]
-        else:
+        if min_blob_size < area < max_blob_size:
             if draw_contours:
                 cv2.drawContours(final, contours, i, (0,0,255), 2)
-            mom = cv2.moments(contours[i])
-            if mom['m00'] != 0:
-                cx = mom['m10']/mom['m00']
-                cy = mom['m01']/mom['m00']
+            moments = cv2.moments(contours[i])
+            if moments['m00']:
+                cx = moments['m10']/moments['m00']
+                cy = moments['m01']/moments['m00']
             else:
                 cx = 0
                 cy = 0
-            meas_now.append([cx,cy])
+
+            if meas_last and meas_now:
+                meas_now.append([cx,cy])
             i += 1
+        else:
+            contours = contours[:i] + contours[i+1:]
+            
     return final, contours, meas_last, meas_now
 
 def apply_k_means(contours, n_inds, meas_now):

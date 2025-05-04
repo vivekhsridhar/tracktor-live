@@ -8,7 +8,7 @@ import json
 import cv2
 import numpy as np
 
-from . import tracktor as tr
+from . import trackutils as tru
 
 def parse_arguments():
     """
@@ -51,7 +51,11 @@ def process_image(image, block_size, offset, min_blob_size, max_blob_size, inver
     block_size = max(3, block_size | 1)  # Ensure block size is odd
 
     # Generate binary mask
-    thresh = tr.colour_to_thresh(current_image, block_size=block_size,
+    thresh = tru.get_contours(current_image, block_size=block_size, meas_last=None, meas_now=None, 
+                                min_area=None, max_area=None, offset=offset, scaling=1.0, 
+                                fps=None, invert=True, draw_contours=True)
+
+    colour_to_thresh(current_image, block_size=block_size,
                                  offset=offset, blur=False, invert=bool(invert))
 
     # Find external contours
@@ -131,42 +135,42 @@ def gui_set_params(cap,
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
     # Create GUI sliders
-    cv2.namedWindow('Threshold Parameters', cv2.WINDOW_NORMAL)
-    cv2.resizeWindow('Threshold Parameters', 1000, 80)
+    cv2.namedWindow('Tracking Parameters', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('Tracking Parameters', 1000, 80)
 
-    cv2.createTrackbar('Block size', 'Threshold Parameters', initial_block_size, block_size_max, lambda x: None)
-    cv2.createTrackbar('Offset', 'Threshold Parameters', initial_offset, offset_max, lambda x: None)
-    cv2.createTrackbar('Min blob size', 'Threshold Parameters', initial_min_blob_size, min_blob_size_max, lambda x: None)
-    cv2.createTrackbar('Max blob size', 'Threshold Parameters', initial_max_blob_size, max_blob_size_max, lambda x: None)
-    cv2.createTrackbar('Invert', 'Threshold Parameters', initial_invert, 1, lambda x: None)
+    cv2.createTrackbar('Block size', 'Tracking Parameters', initial_block_size, block_size_max, lambda x: None)
+    cv2.createTrackbar('Offset', 'Tracking Parameters', initial_offset, offset_max, lambda x: None)
+    cv2.createTrackbar('Min blob size', 'Tracking Parameters', initial_min_blob_size, min_blob_size_max, lambda x: None)
+    cv2.createTrackbar('Max blob size', 'Tracking Parameters', initial_max_blob_size, max_blob_size_max, lambda x: None)
+    cv2.createTrackbar('Invert', 'Tracking Parameters', initial_invert, 1, lambda x: None)
 
     if vidtype=="file":
-        cv2.createTrackbar('Seek', 'Threshold Parameters', 0, total_frames - 1, lambda x: None)
+        cv2.createTrackbar('Seek', 'Tracking Parameters', 0, total_frames - 1, lambda x: None)
 
     while True:
         if not is_paused:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            frame_index = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
-            cv2.setTrackbarPos('Seek', 'Threshold Parameters', frame_index)
+            try:
+                frame, frame_index = tru.get_frame(cap)
+            except:
+                print("Video complete")
+            cv2.setTrackbarPos('Seek', 'Tracking Parameters', frame_index)
 
         else:
             # If paused and user moves the trackbar, fetch frame at that index
-            seek_pos = cv2.getTrackbarPos('Seek', 'Threshold Parameters')
+            seek_pos = cv2.getTrackbarPos('Seek', 'Tracking Parameters')
             if seek_pos != frame_index:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, seek_pos)
-                ret, frame = cap.read()
-                if not ret:
-                    break
-                frame_index = seek_pos
+                try:
+                    frame, frame_index = tru.get_frame(cap)
+                except:
+                    print("Video complete")
 
         # Get parameter values
-        block_size = cv2.getTrackbarPos('Block size', 'Threshold Parameters')
-        offset = cv2.getTrackbarPos('Offset', 'Threshold Parameters')
-        min_blob_size = cv2.getTrackbarPos('Min blob size', 'Threshold Parameters')
-        max_blob_size = cv2.getTrackbarPos('Max blob size', 'Threshold Parameters')
-        invert = cv2.getTrackbarPos('Invert', 'Threshold Parameters')
+        block_size = cv2.getTrackbarPos('Block size', 'Tracking Parameters')
+        offset = cv2.getTrackbarPos('Offset', 'Tracking Parameters')
+        min_blob_size = cv2.getTrackbarPos('Min blob size', 'Tracking Parameters')
+        max_blob_size = cv2.getTrackbarPos('Max blob size', 'Tracking Parameters')
+        invert = cv2.getTrackbarPos('Invert', 'Tracking Parameters')
 
         process_image(frame, block_size, offset, min_blob_size, max_blob_size, invert)
 
@@ -183,9 +187,9 @@ def gui_set_params(cap,
 
     # Update config file if values changed
     configdict = update_params_file(block_size, offset, min_blob_size, max_blob_size,
-                       initial_block_size, initial_offset,
-                       initial_min_blob_size, initial_max_blob_size,
-                       invert, initial_invert, write_file=write_file)
+                                    initial_block_size, initial_offset,
+                                    initial_min_blob_size, initial_max_blob_size,
+                                    invert, initial_invert, write_file=write_file)
 
     return configdict
 
@@ -200,9 +204,9 @@ def main():
 
     # Initialize video capture from file or camera
     if args.file:
-        cap = cv2.VideoCapture(args.file)
+        cap = tru.get_vid(args.file)
     else:
-        cap = cv2.VideoCapture(int(args.camera))
+        cap = tru.get_vid(int(args.camera))
 
     vidtype = "cam"
     if args.file:
