@@ -189,9 +189,6 @@ Below are platform-specific setup instructions.
 
 ## Core concepts
 
-Perfect — based on your clarified priorities and the client example, here is a refined and practical draft for:
-
-## Core Concepts
 
 TracktorLive is designed to be minimal and scriptable. Most of the work happens through small user-defined functions called **cassette functions**, which let you control what happens during tracking and what gets saved or triggered.
 
