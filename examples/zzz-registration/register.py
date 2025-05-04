@@ -55,8 +55,6 @@ def crop_to_center(server):
     if np.any(np.isnan(pos)):
         return
 
-    print(pos)
-
     if np.any(pos < 0):
         return
 
