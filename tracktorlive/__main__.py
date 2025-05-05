@@ -49,10 +49,15 @@ def run_track(args):
         print("Error: 'fps' must be included in the parameter file", file=sys.stderr)
         sys.exit(1)
 
+    if args.numtrack is not None:
+        n_ind = int(args.numtrack)
+    else:
+        n_ind = 1
+
     server, semm = trl.spawn_trserver(
         source,
         params=params,
-        n_ind=1,
+        n_ind=n_ind,
         feed_id=args.feed_id,
         realtime=realtime
     )
@@ -99,6 +104,7 @@ def main():
     track_parser.add_argument("--camera", "-c", help="Camera index", type=int)
     track_parser.add_argument("--file", "-f", help="Video file path")
     track_parser.add_argument("--feed-id", "-I", help="Feed ID", default=None)
+    track_parser.add_argument("--numtrack", "-n", help="Number of recorded individuals.", default=1, type=int)
 
     # Clear subcommand
     clear_parser = subparsers.add_parser("clear", help="Remove all feed/client files")
