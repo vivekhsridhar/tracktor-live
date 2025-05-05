@@ -137,7 +137,7 @@ Below are platform-specific setup instructions.
 1. Install Homebrew (if not already installed):
 
     ```bash 
-    python -m pip install tracktorlive
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     ```
 
 2. Install system tools and python
