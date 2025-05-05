@@ -26,15 +26,13 @@ import tracktorlive as trl
 VEL_CALC_NUM_FRAMES = 5
 THRESHOLD_VEL = 125 #px/s
 RUN_COMMAND = "cvlc --fullscreen --play-and-exit --no-osd ./looming-video.mp4"
-COMMAND_COOLDOWN = 5 #seconds
+COMMAND_COOLDOWN = 15 #seconds
 # Code starts below.
 
 
 def run_quiet_command(cmd=RUN_COMMAND):
     """Run a bash command quietly and block until it completes."""
-    print("starting command")
     subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=os.environ.copy())
-    print("stopping command")
 
 
 # First, let's load the parameters.

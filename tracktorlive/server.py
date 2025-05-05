@@ -385,8 +385,11 @@ class TracktorServer:
         if self.running.value:
             self.stop()
             time.sleep(0.001)
-        self.datashm.close()
-        self.clockshm.close()
+        try:
+            self.datashm.close()
+            self.clockshm.close()
+        except (FileNotFoundError, KeyError):
+            pass
         for shm in (self.datashm, self.clockshm):
             try:
                 shm.unlink()
@@ -441,7 +444,11 @@ def close_trserver(server, semm):
         RuntimeError: If stopping the server or joining the semaphore fails.
     """
 
-    server.stop()
+    try:
+        server.stop()
+    except (FileNotFoundError, KeyError) as e:
+        print(f"[WARN]: an SHM closing issue occured: {e}, but is likely safe to ignore.")
+        print("Run 'tracktorlive clear' to be safe.")
     semm.terminate()
     semm.join()
     semm.close()
@@ -522,6 +529,7 @@ def run_trsession(server, semm, clients=None):
         for cl in clients:
             try:
                 cl.stop()
+
             except Exception as e:
                 print(f"Error stopping client: {e}")
 
