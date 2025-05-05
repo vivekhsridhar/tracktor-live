@@ -63,7 +63,7 @@ def process_image(image, block_size, offset, min_blob_size, max_blob_size, inver
 def update_params_file(block_size, offset, min_blob_size, max_blob_size, invert, 
                        initial_block_size, initial_offset,
                        initial_min_blob_size, initial_max_blob_size,
-                       initial_invert, write_file=False):
+                       initial_invert, write_file=None):
     """
     Updates the params.json file if any of the parameters have changed.
     
@@ -85,11 +85,11 @@ def update_params_file(block_size, offset, min_blob_size, max_blob_size, invert,
             "invert": invert
         }
 
-        if write_file:
-            with open("params.json", "w", encoding="utf-8") as f:
+        if write_file is not None:
+            with open(write_file, "w", encoding="utf-8") as f:
                 json.dump(config, f, indent=4)
 
-            print("Parameters updated in params.json")
+            print(f"Parameters updated in {write_file}")
         return config
 
 
@@ -99,7 +99,7 @@ def gui_set_params(cap,
                     offset_max=100,
                     min_blob_size_max=5000,
                     max_blob_size_max=50000,
-                    write_file=False):
+                    write_file=None):
     """
     Main function to handle GUI threshold tuning and contour display.
     """
