@@ -19,4 +19,4 @@
   sensibly get a new name.
 - [ ] video file-format and codec handling in write_video and dumpvideo
 - [ ] handle invert variable value (defaults to 51)
-- [ ] paramfixing using trackutils instead of cv2 functions
+- [x] paramfixing using trackutils instead of cv2 functions
