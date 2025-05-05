@@ -63,11 +63,7 @@ def process_image(image, block_size, offset, min_blob_size, max_blob_size, img_i
 def update_params_file(block_size, offset, min_blob_size, max_blob_size, img_invert, 
                        initial_block_size, initial_offset,
                        initial_min_blob_size, initial_max_blob_size,
-<<<<<<< Updated upstream
-                       initial_invert, write_file=None):
-=======
-                       initial_img_invert, write_file=False):
->>>>>>> Stashed changes
+                       initial_img_invert, write_file=None):
     """
     Updates the params.json file if any of the parameters have changed.
     
@@ -94,7 +90,15 @@ def update_params_file(block_size, offset, min_blob_size, max_blob_size, img_inv
                 json.dump(config, f, indent=4)
 
             print(f"Parameters updated in {write_file}")
-        return config
+    else:
+        config ={
+            "block_size":   initial_block_size,
+            "offset":       initial_offset,
+            "min_area":     initial_min_blob_size,
+            "max_area":     initial_max_blob_size,
+            "img_invert":   initial_img_invert
+        }
+    return config
 
 
 def gui_set_params(cap,
