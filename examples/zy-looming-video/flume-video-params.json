@@ -1,7 +1,7 @@
 {
     "block_size": 71,
-    "offset": 18,
-    "min_area": 447,
-    "max_area": 664,
+    "offset": 15,
+    "min_area": 100,
+    "max_area": 1000,
     "invert": 51
 }
