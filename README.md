@@ -1,4 +1,4 @@
-TracktorLive
+TracktorLive (v0.9-beta)
 ============
 
 **TracktorLive** is a real-time video tracking and data serving
@@ -85,13 +85,30 @@ run_trsession(server, semm, client)
 🧪 Real-world Use Cases
 ----------------------
 
-- thode examples likhenge
+We provide five complete examples to demonstrate the capabilities of this
+software.
+
+- [Visualise](./examples/zzx-visualise): simply track animals and add tracked
+  contours and centroids to the video.
+- [Arduino-comm](./examples/zx-arduino-comm): trigger an LED to turn on on an
+  Arduino board when an animal is within a certain location
+- [Looming stimulus](./examples/zy-looming-video): play a brief video (or,
+  indeed, run any shell command) when an animal is in movement.
+- [Registration](./examples/zzz-registration): save to disk a smaller video with
+  the tracked individual at the centre (ideal for later steps including posture
+  recognition and so on)
+- [Chunking](./examples/zz-video-chunking): record videos only when two
+  individuals are interacting with each other.
+
+While these are the uses so far, we encourage users to try more things. We have
+discussed as potential future applications, e.g., 3D tracking using 3 cameras,
+and camera control to select recording device based on individual's location.
 
 
 📬 Status
 --------
 
-TracktorLive is a practical, evolving toolkit. APIs may change. You're
+TracktorLive is a still an evolving toolkit. APIs may change. You're
 encouraged to adapt parts for your own research or build wrappers that
 suit your workflow.
 
