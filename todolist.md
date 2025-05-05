@@ -14,9 +14,9 @@
 - [ ] automatic detection of "file" vs "cam" and fps, and set server.realtime
   automatically.
 - [ ] output file names based on the input filenames, and other global params
-  brought to beginning
-- [ ] paramfixing.py: write_file change from bool to str, and if it is None,
+  brought to beginning + example cleaup
+- [x] paramfixing.py: write_file change from bool to str, and if it is None,
   sensibly get a new name.
 - [ ] video file-format and codec handling in write_video and dumpvideo
-- [ ] handle invert variable value (defaults to 51)
+- [x] handle invert variable value (defaults to 51)
 - [x] paramfixing using trackutils instead of cv2 functions
