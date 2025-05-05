@@ -166,6 +166,8 @@ Below are platform-specific setup instructions.
     wsl --install -d Ubuntu
     ```
 
+    You might be prompted to enter a username and password for the virtual Linux
+    system, which you will need to remember.
     Restart your computer after this step finishes.
 
 2. After restarting, start WSL on Powershell
@@ -174,7 +176,7 @@ Below are platform-specific setup instructions.
     wsl
     ```
 
-3. After this, you will enter a WSL linux shell. Run
+3. You are now within WSL in a 'bash' shell. Run
 
     ```bash
     cd ~
@@ -182,9 +184,19 @@ Below are platform-specific setup instructions.
 
     to enter your Linux home directory.
 
-4. Follow Linux instructions (above) for further proceedings.
+4. To get access to GUI functionality on WSL, e.g., for fixing parameter values,
+    run the following commands within WSL.
 
-5. Run all TracktorLive scripts within WSL.
+    ```bash
+    sudo apt install vlc
+    sudo apt install python3-pyqt5 python3-opencv libxcb-xinerama0
+    ```
+
+    **Note**: The GUI might not work on outdated versions of WSL.
+
+5. Follow Linux instructions (above) for further proceedings.
+
+6. Run all TracktorLive scripts within WSL.
 
 
 ## Core concepts
@@ -218,7 +230,7 @@ To write one:
 * Optional: use previous time points by indexing further back (e.g. `-2`, `-3`)
 
 
-### 🧩 4.2 Server Cassette Functions
+### 🧩 Server Cassette Functions
 
 Server cassette functions are slightly more advanced and give you direct access to video frames and state. These are used when you need to:
 
@@ -244,7 +256,7 @@ To write one:
 
 ---
 
-### ⏹ 4.3 Stop Cassette Functions
+### ⏹ Stop Cassette Functions
 
 These are called once at the end of a tracking session. They're useful for saving final results like:
 
@@ -260,7 +272,7 @@ def save_final_video(server):
 
 ---
 
-### ⏱ 4.4 Start Cassette Functions
+### ⏱ Start Cassette Functions
 
 Start cassettes run once, just before tracking begins. You can use them to sync timers, or log a start event.
 
@@ -272,7 +284,7 @@ def announce(server):
 
 ---
 
-### ⚙️  Internals (Briefly)
+### Internals (Briefly)
 
 Behind the scenes:
 
@@ -284,7 +296,7 @@ All you have to do is define functions, decorate them, and run `trl.run_trsessio
 
 ---
 
-## 5. Writing Your Own Cassette Functions
+## Writing Your Own Cassette Functions
 
 Cassette functions are the core way to use and customize TracktorLive. 
 TracktorLive provides flexibility: you can write simple one-liners or build complete pipelines to 
@@ -292,7 +304,7 @@ control recordings, trigger devices, or annotate frames.
 
 ---
 
-### 5.1 Writing a Client Cassette (Recommended)
+### Writing a Client Cassette (Recommended)
 
 Client cassettes are the easiest place to start. They are regular Python functions that are called automatically every few milliseconds while tracking is active.
 
@@ -333,7 +345,7 @@ To write one:
   proceeds.)
 
 
-### 🎥 5.2 Writing a Server Cassette (Advanced)
+### 🎥 Writing a Server Cassette (Advanced)
 
 If you need access to live frames or want to influence recording directly, you can write a server-side cassette.
 
