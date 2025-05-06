@@ -88,8 +88,26 @@ def run_clear(_):
                     print(f"Failed to delete {path}: {e}")
 
 
+tr_help = f"""tracktorlive 0.9.0-beta
+TracktorLive: Real-time tracking and response delivery for behavioural
+experiments.
+
+TracktorLive was created by {trl.__author__}, and is provided as-is under a
+{trl.__license__} license.  (see LICENSE for further details.) TracktorLive is
+powered by Tracktor, and is designed to run on low computational power, frugal
+systems. To know more:
+
+TracktorLive: {trl.__url__}
+Tracktor: https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.13166
+DOCS: {trl.__url__}/DOCS.md
+"""
+
 def main():
-    parser = argparse.ArgumentParser(prog="tracktorlive")
+    parser = argparse.ArgumentParser(
+                                prog="tracktorlive",
+                                description=tr_help,
+                                formatter_class=argparse.RawDescriptionHelpFormatter
+                            )
     subparsers = parser.add_subparsers(dest="command")
 
     # GUI subcommand

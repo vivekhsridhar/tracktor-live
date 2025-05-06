@@ -13,6 +13,7 @@ from .paramfixing import gui_set_params as get_params_from_gui
 __version__ = "0.1.0"
 __author__ = "All the authors here" #FIXME
 __license__ = "MIT"
+__url__ = "https://github.com/vivekhsridhar/tracktor-live"
 
 __all__ = ['TracktorServer', 'TracktorClient',
             'spawn_trserver', 'run_trserver', 'close_trserver',
