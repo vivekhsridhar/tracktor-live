@@ -63,7 +63,7 @@ def process_image(image, block_size, offset, min_blob_size, max_blob_size, img_i
 def update_params_file(block_size, offset, min_blob_size, max_blob_size, img_invert, 
                        initial_block_size, initial_offset,
                        initial_min_blob_size, initial_max_blob_size,
-                       initial_img_invert, write_file=None):
+                       initial_img_invert, fps=None, write_file=None):
     """
     Updates the params.json file if any of the parameters have changed.
     
@@ -83,7 +83,8 @@ def update_params_file(block_size, offset, min_blob_size, max_blob_size, img_inv
             "offset": offset,
             "min_area": min_blob_size,
             "max_area": max_blob_size,
-            "img_invert": img_invert
+            "invert": img_invert,
+            "fps": fps
         }
 
         if write_file is not None:
@@ -97,7 +98,8 @@ def update_params_file(block_size, offset, min_blob_size, max_blob_size, img_inv
             "offset":       initial_offset,
             "min_area":     initial_min_blob_size,
             "max_area":     initial_max_blob_size,
-            "img_invert":   initial_img_invert
+            "invert":   initial_img_invert,
+            "fps": fps
         }
     return config
 
@@ -183,12 +185,12 @@ def gui_set_params(cap,
     block_size = block_size | 1
 
     # Update config file if values changed
+    fps = cap.get(cv2.CAP_PROP_FPS)
     configdict = update_params_file(block_size, offset, min_blob_size, max_blob_size,
                                     img_invert, initial_block_size, initial_offset,
                                     initial_min_blob_size, initial_max_blob_size,
-                                    initial_img_invert, write_file=write_file)
+                                    initial_img_invert, fps=fps, write_file=write_file)
 
-    configdict["fps"] = cap.get(cv2.CAP_PROP_FPS)
     return configdict
 
 
