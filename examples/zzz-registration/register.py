@@ -87,7 +87,6 @@ def close_crop_writer(server):
     if hasattr(server, "crop_writer") and server.crop_writer is not None:
         server.crop_writer.release()
         server.crop_writer = None
-        print('released')
 
 trl.run_trsession(server, semm)
 
