@@ -22,7 +22,7 @@ __all__ = ['TracktorServer', 'TracktorClient',
             ]
 
 APP_NAME = "tracktorlive"
-APP_AUTHOR = "DIPV"# Dom, Isaac, Pranav, Vivek
+APP_AUTHOR = "Dominique Roche, Isaac Planas-Sitjà, Pranav Minasandra, Vivek H Sridhar"# Dom, Isaac, Pranav, Vivek
 FEEDS_DIR = joinpath(
                 pfd.user_data_dir(appname=APP_NAME, appauthor=APP_AUTHOR),
                 "LiveFeeds"
