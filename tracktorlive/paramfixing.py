@@ -71,6 +71,7 @@ def update_params_file(block_size, offset, min_blob_size, max_blob_size, img_inv
         block_size, offset, min_blob_size, max_blob_size, img_invert: Current values.
         initial_*: Corresponding initial values.
     """
+
     if (block_size != initial_block_size or
         offset != initial_offset or
         min_blob_size != initial_min_blob_size or
@@ -187,6 +188,7 @@ def gui_set_params(cap,
                                     initial_min_blob_size, initial_max_blob_size,
                                     initial_img_invert, write_file=write_file)
 
+    configdict["fps"] = cap.get(cv2.CAP_PROP_FPS)
     return configdict
 
 
