@@ -231,7 +231,7 @@ connected, in your terminal, you can use:
 
     As before, `--file /path/to/file` can be used in place of `--camera 0`.
     Furthermore, the `tracktorlive track` subcommand can optionally take
-    a `--feed-id <a-unique-identifier>` and `--numtrack <an-integer>` arguments to
+    a `--feed-id <a-unique-identifier>` and `--numtrack <how-many-individuals>` arguments to
     customise tracking. The server's feed is displayed, and can be used in any
     client-program you wish to write.
 
@@ -244,7 +244,7 @@ TracktorLive is designed to be minimal and scriptable. Most of the work happens 
 Cassette functions come in three types:
 
 
-### 🎬 Client Cassette Functions (Recommended)
+### 🎬 Client Cassette Functions (Basic)
 
 Client cassette functions are the simplest and most common way to interact with tracking data. They run continuously in the background and receive the latest buffer of tracking data and timestamps. You can use them to trigger devices, monitor zones, save values, or drive visualizations.
 
@@ -258,12 +258,15 @@ def log_position(data, clock):
 ```
 
 This function is automatically called every few milliseconds as long as the tracking is active.
+There is no guarantee that the server will have processed another frame by this
+time, so the client might get the same data over several iterations. Being
+robust to this effect is necessary for real-time applications.
 
 To write one:
 
 * Decorate a function with `@client`
 * Accept two arguments: `data` and `clock`
-* Use the last index `-1` to access the most recent values
+* Use the last index `-1` to access the most recent tracked values
 * Optional: use previous time points by indexing further back (e.g. `-2`, `-3`)
 
 
@@ -271,6 +274,7 @@ To write one:
 
 Server cassette functions are slightly more advanced and give you direct access to video frames and state. These are used when you need to:
 
+- Edit video and tracking properties
 * Dynamically write video
 * Overlay graphics on live frames
 * Run tracking-dependent logic directly during processing
@@ -287,7 +291,9 @@ To write one:
 
 * Decorate a function with `@server`
 * Accept a single `server` argument
-* Access `server.framesbuffer[-1]` for the latest frame
+* Access `server.framesbuffer[-1]` for the latest *tracked* frame
+- Access server.current_frame for the frame about to be submitted to the
+  tracking procedure
 * Access `server.get_data_and_clock()` for safely retrieving position data
 * Can modify flags like `server.keep_video.value = True`
 
@@ -427,4 +433,4 @@ left of the screen.
 TracktorLive includes a set of example scripts that demonstrate common use cases.
 These are a great starting point if you're not sure how to structure your logic.
 
-You'll find them in the `examples/` folder on our GitHub repository.
+You'll find them in the [`examples/`](./examples/) folder on our GitHub repository.
